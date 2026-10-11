@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/fiwon123/distributed-task-queue/internal/queue"
 )
@@ -33,6 +34,13 @@ type fakeStore struct {
 	statsQueue string
 	stats      queue.Stats
 	statsErr   error
+
+	listJobsParams  queue.ListParams
+	listJobsResult  []queue.Job
+	listJobsErr     error
+	listQueues      []queue.QueueInfo
+	listQueuesErr   error
+	listQueuesCalls int
 }
 
 func (f *fakeStore) Enqueue(_ context.Context, p queue.EnqueueParams) (queue.Job, error) {
@@ -75,6 +83,22 @@ func (f *fakeStore) QueueStats(_ context.Context, name string) (queue.Stats, err
 		return queue.Stats{}, f.statsErr
 	}
 	return f.stats, nil
+}
+
+func (f *fakeStore) ListJobs(_ context.Context, p queue.ListParams) ([]queue.Job, error) {
+	f.listJobsParams = p
+	if f.listJobsErr != nil {
+		return nil, f.listJobsErr
+	}
+	return f.listJobsResult, nil
+}
+
+func (f *fakeStore) ListQueues(_ context.Context) ([]queue.QueueInfo, error) {
+	f.listQueuesCalls++
+	if f.listQueuesErr != nil {
+		return nil, f.listQueuesErr
+	}
+	return f.listQueues, nil
 }
 
 func discardLogger() *slog.Logger {
@@ -370,5 +394,154 @@ func TestHandleQueueStatsInternalError(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "boom") {
 		t.Errorf("internal error leaked to client: %s", w.Body.String())
+	}
+}
+
+func TestHandleListJobsOK(t *testing.T) {
+	store := &fakeStore{listJobsResult: []queue.Job{
+		{ID: testJobID, Type: "email", Queue: "critical", Status: queue.StatusDead},
+	}}
+
+	w := do(t, store, http.MethodGet, "/v1/jobs?queue=critical&status=dead&limit=10", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if store.listJobsParams.Queue != "critical" ||
+		store.listJobsParams.Status != queue.StatusDead ||
+		store.listJobsParams.Limit != 10 {
+		t.Errorf("params = %+v, want queue=critical status=dead limit=10", store.listJobsParams)
+	}
+
+	var got struct {
+		Jobs  []queue.Job `json:"jobs"`
+		Count int         `json:"count"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Count != 1 || len(got.Jobs) != 1 || got.Jobs[0].ID != testJobID {
+		t.Errorf("response = %+v, want one job %s", got, testJobID)
+	}
+}
+
+func TestHandleListJobsErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		target     string
+		storeErr   error
+		wantStatus int
+	}{
+		{"bad limit", "/v1/jobs?limit=abc", nil, http.StatusBadRequest},
+		{"validation error", "/v1/jobs?status=bogus", &queue.ValidationError{Message: "unknown status \"bogus\""}, http.StatusBadRequest},
+		{"internal error", "/v1/jobs", errors.New("boom"), http.StatusInternalServerError},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeStore{listJobsErr: tc.storeErr}
+			w := do(t, store, http.MethodGet, tc.target, "")
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", w.Code, tc.wantStatus, w.Body.String())
+			}
+			if tc.wantStatus == http.StatusBadRequest && tc.storeErr == nil && store.listJobsParams.Limit != 0 {
+				t.Errorf("bad limit should not reach the store, got params %+v", store.listJobsParams)
+			}
+			if strings.Contains(w.Body.String(), "boom") {
+				t.Errorf("internal error leaked to client: %s", w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleListQueuesOK(t *testing.T) {
+	store := &fakeStore{listQueues: []queue.QueueInfo{
+		{Name: "critical", Total: 3},
+		{Name: "default", Total: 7},
+	}}
+
+	w := do(t, store, http.MethodGet, "/v1/queues", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	var got struct {
+		Queues []queue.QueueInfo `json:"queues"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got.Queues) != 2 || got.Queues[0].Name != "critical" || got.Queues[1].Total != 7 {
+		t.Errorf("queues = %+v", got.Queues)
+	}
+}
+
+func TestHandleListQueuesInternalError(t *testing.T) {
+	store := &fakeStore{listQueuesErr: errors.New("boom")}
+
+	w := do(t, store, http.MethodGet, "/v1/queues", "")
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusInternalServerError, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "boom") {
+		t.Errorf("internal error leaked to client: %s", w.Body.String())
+	}
+}
+
+// TestDashboardServing covers the embedded-SPA handler: real assets are served,
+// unknown client-side routes fall back to index.html, and non-GET is rejected.
+func TestDashboardServing(t *testing.T) {
+	assets := fstest.MapFS{
+		"index.html":    {Data: []byte("<html>dashboard</html>")},
+		"assets/app.js": {Data: []byte("console.log('hi')")},
+	}
+	srv := New(&fakeStore{}, discardLogger()).WithDashboard(assets)
+	handler := srv.Handler()
+
+	tests := []struct {
+		name        string
+		method      string
+		target      string
+		wantStatus  int
+		wantContain string
+	}{
+		{"root serves index", http.MethodGet, "/", http.StatusOK, "dashboard"},
+		{"asset served", http.MethodGet, "/assets/app.js", http.StatusOK, "console.log"},
+		{"deep link falls back to index", http.MethodGet, "/jobs/some-id", http.StatusOK, "dashboard"},
+		{"method not allowed", http.MethodPost, "/", http.StatusMethodNotAllowed, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(tc.method, tc.target, nil)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", w.Code, tc.wantStatus, w.Body.String())
+			}
+			if tc.wantContain != "" && !strings.Contains(w.Body.String(), tc.wantContain) {
+				t.Errorf("body %q does not contain %q", w.Body.String(), tc.wantContain)
+			}
+		})
+	}
+}
+
+// TestDashboardDoesNotShadowAPIRoutes verifies /v1 still routes to the API when
+// a dashboard is mounted.
+func TestDashboardDoesNotShadowAPIRoutes(t *testing.T) {
+	assets := fstest.MapFS{"index.html": {Data: []byte("<html>dashboard</html>")}}
+	store := &fakeStore{stats: queue.Stats{Queue: "default", Counts: map[queue.Status]int{}, Total: 0}}
+	srv := New(store, discardLogger()).WithDashboard(assets)
+	handler := srv.Handler()
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/queues/default/stats", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"queue":"default"`) {
+		t.Errorf("API response expected, got %s", w.Body.String())
 	}
 }

@@ -24,6 +24,21 @@ const (
 	StatusDead Status = "dead"
 )
 
+// AllStatuses is the fixed census of job states, in lifecycle order.
+var AllStatuses = []Status{
+	StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusDead,
+}
+
+// Valid reports whether s is one of the five known statuses.
+func (s Status) Valid() bool {
+	for _, known := range AllStatuses {
+		if s == known {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultQueue is the queue a job lands in when the request omits one.
 const DefaultQueue = "default"
 

@@ -155,17 +155,11 @@ func (s *Store) Requeue(ctx context.Context, id string) (Job, error) {
 	}
 }
 
-// Stats is a per-queue breakdown of jobs by status.
+// QueueStats reports the census of job states for a queue.
 type Stats struct {
 	Queue  string         `json:"queue"`
 	Counts map[Status]int `json:"counts"`
 	Total  int            `json:"total"`
-}
-
-// allStatuses is the fixed order/census reported by QueueStats, so every state
-// appears in the output even when its count is zero.
-var allStatuses = []Status{
-	StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusDead,
 }
 
 const queueStatsSQL = `
@@ -183,8 +177,8 @@ func (s *Store) QueueStats(ctx context.Context, queueName string) (Stats, error)
 	}
 	defer rows.Close()
 
-	stats := Stats{Queue: queueName, Counts: make(map[Status]int, len(allStatuses))}
-	for _, st := range allStatuses {
+	stats := Stats{Queue: queueName, Counts: make(map[Status]int, len(AllStatuses))}
+	for _, st := range AllStatuses {
 		stats.Counts[st] = 0
 	}
 	for rows.Next() {

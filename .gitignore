@@ -47,6 +47,13 @@ air.log
 # Agent session memory (local-only, never committed)
 .opencode/memory/
 
+# Local Node toolchain (agents/hosts without a system Node can drop one here)
+/.node/
+
+# Node deps and build byproducts (the built embed bundle in web/dist IS committed)
+node_modules/
+*.tsbuildinfo
+
 # Editor/IDE
 # .idea/
 # .vscode/

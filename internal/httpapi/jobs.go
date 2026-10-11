@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -149,4 +150,47 @@ func (s *Server) handleQueueStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, stats)
+}
+
+// handleListJobs implements GET /v1/jobs?queue=&status=&limit=.
+func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	p := queue.ListParams{
+		Queue:  query.Get("queue"),
+		Status: queue.Status(query.Get("status")),
+	}
+	if raw := query.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "limit must be an integer")
+			return
+		}
+		p.Limit = n
+	}
+
+	jobs, err := s.store.ListJobs(r.Context(), p)
+	if err != nil {
+		var invalid *queue.ValidationError
+		if errors.As(err, &invalid) {
+			writeError(w, http.StatusBadRequest, invalid.Message)
+			return
+		}
+		s.log.Error("list jobs", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs, "count": len(jobs)})
+}
+
+// handleListQueues implements GET /v1/queues.
+func (s *Server) handleListQueues(w http.ResponseWriter, r *http.Request) {
+	queues, err := s.store.ListQueues(r.Context())
+	if err != nil {
+		s.log.Error("list queues", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"queues": queues})
 }

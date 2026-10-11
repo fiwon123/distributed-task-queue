@@ -1,8 +1,8 @@
-// Command api serves the distributed-task-queue HTTP API.
+// Command api serves the distributed-task-queue HTTP API and dashboard.
 //
-// It connects to PostgreSQL, optionally applies migrations, and exposes
-// POST /v1/jobs and GET /v1/jobs/{id} until it receives SIGINT/SIGTERM, then
-// shuts down gracefully.
+// It connects to PostgreSQL, optionally applies migrations, serves the /v1
+// endpoints plus the embedded web dashboard at /, and runs until it receives
+// SIGINT/SIGTERM, then shuts down gracefully.
 package main
 
 import (
@@ -10,6 +10,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/fiwon123/distributed-task-queue/internal/httpapi"
 	"github.com/fiwon123/distributed-task-queue/internal/queue"
 	"github.com/fiwon123/distributed-task-queue/migrations"
+	"github.com/fiwon123/distributed-task-queue/web"
 )
 
 func main() {
@@ -65,9 +67,19 @@ func run() error {
 		logger.Info("migrations applied")
 	}
 
+	api := httpapi.New(queue.New(pool), logger)
+	// Serve the embedded dashboard. fs.Sub only fails on an invalid path, which
+	// would be a build-time embedding bug, so a failure is fatal rather than a
+	// silent "no UI".
+	dashboard, err := fs.Sub(web.Dist, "dist")
+	if err != nil {
+		return fmt.Errorf("locate embedded dashboard: %w", err)
+	}
+	api = api.WithDashboard(dashboard)
+
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           httpapi.New(queue.New(pool), logger).Handler(),
+		Handler:           api.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

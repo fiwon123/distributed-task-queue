@@ -31,12 +31,12 @@ Once built, you can run the API and one or more workers and:
 
 ## Status
 
-**Phase 3 landed — requeue, stats, and graceful shutdown.** The `jobs` table,
-`POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool that claims jobs with
-`FOR UPDATE SKIP LOCKED`, exponential-backoff retries, lease-based recovery of
-jobs abandoned by a dead worker, dead-letter requeue, per-queue stats, and
-graceful shutdown are all implemented and tested. Only the dashboard remains in
-the build order below.
+**Phase 4 landed — the dashboard is done.** The full MVP is now implemented and
+tested: the `jobs` table, `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool
+that claims jobs with `FOR UPDATE SKIP LOCKED`, exponential-backoff retries,
+lease-based recovery of jobs abandoned by a dead worker, dead-letter requeue,
+per-queue stats, graceful shutdown, and a small web dashboard (bundled into the
+API binary) for browsing queues and jobs.
 
 ## Stack
 
@@ -44,21 +44,26 @@ the build order below.
 - **Storage**: PostgreSQL — the queue is a table, not an in-memory list
 - **DB access**: pgx (v5); `FOR UPDATE SKIP LOCKED` for atomic claims
 - **HTTP API**: `net/http`
+- **Dashboard**: a small React + Vite single-page app under `web/`, embedded
+  into the API binary with `go:embed` (no Node needed at runtime)
 - **Workers**: in-process goroutine pool polling the jobs table
 - **Local environment**: Docker Compose dev sandbox + a Postgres service
-- **Testing**: standard `testing` package (`go test`); Postgres integration tests
-  gated behind a build tag
+- **Testing**: standard `testing` package (`go test`) plus Vitest for the
+  dashboard; Postgres integration tests gated behind a build tag
 
 ## API
 
-All four endpoints are implemented.
+All five JSON endpoints are implemented, plus the dashboard is served at `/`.
 
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/jobs` | Enqueue a job (`type`, `payload`, optional `run_at`/`max_attempts`) |
 | `GET` | `/v1/jobs/{id}` | Job status, attempts, last error, timestamps |
+| `GET` | `/v1/jobs` | List jobs, newest first (`queue`, `status`, `limit` filters) |
 | `POST` | `/v1/jobs/{id}/requeue` | Requeue a dead-lettered or failed job |
+| `GET` | `/v1/queues` | List known queues with total job counts |
 | `GET` | `/v1/queues/{name}/stats` | Counts by state for a queue |
+| `GET` | `/` | Web dashboard (single-page app; unknown non-`/v1` paths fall back to it) |
 
 ## Design choices
 
@@ -83,6 +88,7 @@ All four endpoints are implemented.
 - [x] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
 - [x] 6. Dead-letter: dead state + requeue endpoint
 - [x] 7. Graceful shutdown: stop claiming and drain
+- [x] 8. Dashboard: list endpoints + an embedded web UI
 
 ## Done when
 
@@ -122,3 +128,25 @@ make check           # gofmt + vet + test + build (the local gate)
 
 The project follows an issue-first, branch-based workflow — see
 [`WORKFLOW_PROMPT.md`](WORKFLOW_PROMPT.md) and [`AGENTS.md`](AGENTS.md).
+
+### Building the dashboard
+
+The dashboard lives in `web/` (React + Vite, tested with Vitest, linted with
+oxlint and formatted with oxfmt). Its production bundle is **committed** under
+`web/dist/` and embedded into the API binary with `go:embed`, so building and
+running the Go binaries needs no Node toolchain. Rebuild and commit the bundle
+after changing anything under `web/src`:
+
+```bash
+make web-install   # npm ci (once, or after dependency changes)
+make web-build     # build web/dist (commit the result)
+make web-test      # vitest
+make web-lint      # oxlint + oxfmt --check
+```
+
+`make check` runs the web lint/test gates too; if Node is not installed it prints
+an explicit SKIPPED line (`skipped is not passed`) rather than pretending they
+ran. CI rebuilds the bundle and fails if `web/dist` is stale relative to
+`web/src`. With the dashboard embedded, run the API and open
+<http://localhost:8080/> — the SPA falls back for unknown non-`/v1` paths, so
+client-side routes work on reload.

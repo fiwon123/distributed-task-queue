@@ -5,8 +5,11 @@
 # SKIPPED (a skipped run is not a passed run), keeping scaffolding PRs usable.
 
 GO ?= go
+NODE ?= node
+NPM ?= npm
 
 .PHONY: help check fmt vet test build run run-worker clean \
+        web-install web-deps web-build web-test web-lint web-check \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
         shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto
 
@@ -25,6 +28,7 @@ check:
 	else \
 	  $(MAKE) fmt vet test build; \
 	fi
+	@$(MAKE) web-check
 
 # Format only the Go files git knows about (tracked + untracked, minus
 # gitignored). This keeps dependency caches that live under the repo — in the
@@ -56,6 +60,36 @@ run-worker:
 clean:
 	@echo "cleaning"
 	rm -f ./api ./worker
+
+# --- Web dashboard -------------------------------------------------------------
+# The built bundle in web/dist is committed so `go build ./...` and CI work with
+# only Go installed. Rebuild it with `make web-build` after changing web/src.
+
+web-deps:
+	@if [ ! -d web/node_modules ]; then \
+	  echo "==> installing web dependencies"; \
+	  cd web && $(NPM) ci; \
+	fi
+
+web-install: ## Install dashboard dependencies (npm ci)
+	cd web && $(NPM) ci
+
+web-build: web-deps ## Build the dashboard into web/dist (embedded by go:embed)
+	cd web && $(NPM) run build
+
+web-test: web-deps ## Run dashboard unit tests (vitest)
+	cd web && $(NPM) run test
+
+web-lint: web-deps ## Lint (oxlint) + format-check (oxfmt) the dashboard
+	cd web && $(NPM) run lint && $(NPM) run format:check
+
+## web-check: lint + test the dashboard; skips loudly when Node is absent
+web-check:
+	@if ! command -v $(NODE) >/dev/null 2>&1; then \
+	  echo "==> web checks SKIPPED (node not found — skipped is not passed)"; \
+	else \
+	  $(MAKE) web-lint web-test; \
+	fi
 
 # --- Dev sandbox (docker compose) ----------------------------------------------
 

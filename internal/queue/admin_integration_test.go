@@ -224,10 +224,10 @@ func TestQueueStatsUnknownQueueIsZero(t *testing.T) {
 	if stats.Total != 0 {
 		t.Errorf("total = %d, want 0", stats.Total)
 	}
-	if len(stats.Counts) != len(allStatuses) {
-		t.Errorf("counts = %v, want all %d statuses present", stats.Counts, len(allStatuses))
+	if len(stats.Counts) != len(AllStatuses) {
+		t.Errorf("counts = %v, want all %d statuses present", stats.Counts, len(AllStatuses))
 	}
-	for _, st := range allStatuses {
+	for _, st := range AllStatuses {
 		if n, ok := stats.Counts[st]; !ok || n != 0 {
 			t.Errorf("counts[%s] = %d (present=%v), want 0", st, n, ok)
 		}
