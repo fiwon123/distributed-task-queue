@@ -27,6 +27,25 @@ go.work.sum
 
 # env file
 .env
+.env.*
+!.env.example
+.envrc
+
+# Dev sandbox artifacts — Go module/build caches and runtime state live in
+# /workspace (mounted from the repo root), so they must never be committed.
+/tmp/
+/.go/
+/.xdg-data/
+/.xdg-cache/
+/.xdg-state/
+air.log
+
+# Built binaries (from `go build ./cmd/...`)
+/api
+/worker
+
+# Agent session memory (local-only, never committed)
+.opencode/memory/
 
 # Editor/IDE
 # .idea/
