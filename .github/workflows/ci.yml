@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           # Pin a version here once `go.mod` exists (e.g. `go-version-file: go.mod`)
           # so CI and local development agree on the toolchain.
