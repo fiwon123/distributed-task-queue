@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fiwon123/distributed-task-queue/internal/queue"
@@ -105,4 +106,47 @@ func isUUID(s string) bool {
 
 func isHexDigit(c byte) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+// handleRequeue implements POST /v1/jobs/{id}/requeue.
+func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !isUUID(id) {
+		writeError(w, http.StatusNotFound, "job not found")
+		return
+	}
+
+	job, err := s.store.Requeue(r.Context(), id)
+	if err != nil {
+		switch {
+		case errors.Is(err, queue.ErrNotFound):
+			writeError(w, http.StatusNotFound, "job not found")
+		case errors.Is(err, queue.ErrNotRequeueable):
+			writeError(w, http.StatusConflict, "job is not in a requeueable state")
+		default:
+			s.log.Error("requeue job", "id", id, "error", err)
+			writeError(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+
+	writeJSON(w, http.StatusOK, job)
+}
+
+// handleQueueStats implements GET /v1/queues/{name}/stats.
+func (s *Server) handleQueueStats(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if strings.TrimSpace(name) == "" {
+		writeError(w, http.StatusBadRequest, "queue name is required")
+		return
+	}
+
+	stats, err := s.store.QueueStats(r.Context(), name)
+	if err != nil {
+		s.log.Error("queue stats", "queue", name, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, stats)
 }
