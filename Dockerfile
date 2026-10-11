@@ -12,6 +12,8 @@ FROM golang:1.26-bookworm
 # version 404s at build time in a way no linter catches.
 ARG GH_CLI_VERSION=v2.102.0
 ARG TARGETARCH
+# Node powers the web dashboard (web/); keep in sync with mise.toml.
+ARG NODE_VERSION=v24.21.0
 # The host uid/gid, forwarded as build args by docker-compose.yml so the image
 # can create a passwd entry + home matching the host user (kills "I have no
 # name!"). Defaults keep a standalone `docker build` working.
@@ -39,6 +41,26 @@ RUN if [ -z "$TARGETARCH" ]; then \
     && mv "/tmp/gh_${GH_CLI_VERSION#v}_linux_${TARGETARCH}/bin/gh" /usr/local/bin/gh \
     && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_CLI_VERSION#v}_linux_${TARGETARCH}" \
     && gh --version
+
+# Node.js for the dashboard build (`make web-build`). Installed from the
+# official tarball — the same download-and-unpack shape as gh above — so the
+# version is pinned here and matched in mise.toml.
+RUN if [ -z "$TARGETARCH" ]; then \
+      case "$(uname -m)" in \
+        x86_64|amd64) TARGETARCH=amd64 ;; \
+        aarch64|arm64) TARGETARCH=arm64 ;; \
+        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+      esac; \
+    fi \
+    && case "$TARGETARCH" in \
+         amd64) NODE_ARCH=x64 ;; \
+         arm64) NODE_ARCH=arm64 ;; \
+         *) echo "Unsupported node arch: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/node.tar.xz \
+    && node --version && npm --version
 
 # Fast reload for the Go dev loop. This runs as root ON PURPOSE — `go install`
 # writes /go/bin, which is root-owned; the runtime user only needs to EXECUTE
