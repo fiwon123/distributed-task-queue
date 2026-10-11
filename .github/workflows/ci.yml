@@ -115,10 +115,12 @@ jobs:
         run: go build ./...
 
   # Build the runtime image and exercise the whole application the way a user
-  # runs it: Postgres + API + worker via the `stack` compose profile, seed the
+  # runs it: Postgres + API + worker via the `prod` compose profile, seed the
   # demo jobs, and verify the worker drains them to `completed`/`dead`. This is
   # the only job that actually builds the Dockerfile, so it is what verifies the
-  # `runtime` stage and docker-compose wiring.
+  # `runtime` stage and docker-compose wiring. Because every app service is gated
+  # behind a profile, the `prod` profile does not build the heavy dev sandbox
+  # image.
   stack:
     name: Docker stack (build, run, e2e)
     runs-on: ubuntu-latest
@@ -126,7 +128,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Build and start the stack
-        run: docker compose --profile stack up -d --build
+        run: docker compose --profile prod up -d --build
 
       - name: Wait for the API
         run: |
@@ -138,7 +140,7 @@ jobs:
             sleep 2
           done
           echo "API did not become ready" >&2
-          docker compose --profile stack logs
+          docker compose --profile prod logs
           exit 1
 
       - name: Seed demo jobs
@@ -167,9 +169,9 @@ jobs:
         run: |
           curl -fsS http://localhost:8080/v1/queues || true
           echo
-          docker compose --profile stack ps || true
-          docker compose --profile stack logs api worker || true
+          docker compose --profile prod ps || true
+          docker compose --profile prod logs api worker || true
 
       - name: Tear down
         if: always()
-        run: docker compose --profile stack down -v
+        run: docker compose --profile prod down -v

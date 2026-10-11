@@ -30,7 +30,7 @@ echo
 
 if [ -z "$ready" ]; then
     echo "demo: API did not become ready at $API_URL" >&2
-    echo "demo: is the stack up? try 'make stack-up' then 'make stack-logs'" >&2
+    echo "demo: is the stack up? try 'make dev-up' or 'make prod-up' first" >&2
     exit 1
 fi
 
@@ -65,7 +65,7 @@ id="$(enqueue "{\"type\":\"fail\",\"queue\":\"$QUEUE\",\"max_attempts\":2,\"payl
 echo "         id=$id"
 
 echo
-echo "Done. Watch the worker process them with:  make stack-logs"
+echo "Done. Watch the worker process them with:  make prod-logs  (dev stack: make dev-log)"
 echo "Dashboard:                                 ${API_URL%/}/"
 echo "API docs:                                  ${API_URL%/}/docs"
 echo

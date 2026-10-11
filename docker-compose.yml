@@ -1,11 +1,23 @@
-# Dev sandbox compose file — a `dev` service for local development plus a `db`
-# service (PostgreSQL) that the dev service waits to become healthy.
+# Compose file for two independent stacks that share one Postgres (`db`):
 #
-# It also defines the runnable application under the `stack` profile: `api` and
-# `worker` built from the `runtime` Dockerfile stage. Those two are gated behind
-# `profiles: ["stack"]`, so a plain `docker compose up` still starts only the dev
-# sandbox + Postgres. Bring the app up with `make stack-up` (which passes
-# `--profile stack`).
+#   development (profile: dev)  — `dev` sandbox (runs the API via air, fast
+#                                 reload, host :8081) plus a `worker`, so jobs
+#                                 flow while you edit code. `make dev-up`.
+#   production  (profile: prod) — `api` (runtime image, host :8080) plus a
+#                                 `worker`. The real end-to-end app. `make prod-up`.
+#
+# Services select their stack by profile:
+#   - `db`     — no profile; both stacks need it, and it is always started.
+#   - `dev`    — profile `dev` only.
+#   - `worker` — profiles `dev` AND `prod`; it runs in either stack.
+#   - `api`    — profile `prod` only.
+#
+# `docker compose up` with no profile now starts only `db`, because every app
+# service is gated behind a profile. Use the Makefile targets (or pass
+# `--profile dev` / `--profile prod`).
+#
+# Both stacks share the same `db` service and `pgdata` volume, so run one stack
+# at a time — stopping a stack stops the shared database.
 #
 # - No docker socket (by design): the in-container agent cannot manage containers.
 # - Host GitHub config is mounted read-only; tokens are forwarded at runtime via
@@ -41,7 +53,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  # --- runnable application (profile: stack) -----------------------------------
+  # --- production stack (profile: prod) ----------------------------------------
   # Build the `runtime` stage: a minimal Alpine image with the api + worker
   # binaries. Both migrate on startup; migrations serialize on a Postgres
   # advisory lock, so running both concurrently is safe.
@@ -50,7 +62,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    profiles: ["stack"]
+    profiles: ["prod"]
     depends_on:
       db:
         condition: service_healthy
@@ -70,12 +82,16 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Runs in BOTH stacks: in development it gives the air-reloaded API something
+  # to hand jobs to; in production it is the app's worker. It only needs the
+  # database (there is no `api` service in the dev stack), so it does not depend
+  # on `api`.
   worker:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    profiles: ["stack"]
+    profiles: ["dev", "prod"]
     # The runtime stage's ENTRYPOINT is the API; override it for the worker.
     entrypoint: ["/usr/local/bin/worker"]
     command:
@@ -90,12 +106,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      api:
-        condition: service_healthy
     environment:
       - DATABASE_URL=postgres://taskqueue@db:5432/taskqueue?sslmode=disable
     restart: unless-stopped
 
+  # --- development stack (profile: dev) ----------------------------------------
   dev:
     build:
       context: .
@@ -104,6 +119,7 @@ services:
       args:
         HOST_UID: ${HOST_UID:-1000}
         HOST_GID: ${HOST_GID:-1000}
+    profiles: ["dev"]
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
