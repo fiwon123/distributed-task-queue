@@ -1,6 +1,12 @@
 # Dev sandbox compose file — a `dev` service for local development plus a `db`
 # service (PostgreSQL) that the dev service waits to become healthy.
 #
+# It also defines the runnable application under the `stack` profile: `api` and
+# `worker` built from the `runtime` Dockerfile stage. Those two are gated behind
+# `profiles: ["stack"]`, so a plain `docker compose up` still starts only the dev
+# sandbox + Postgres. Bring the app up with `make stack-up` (which passes
+# `--profile stack`).
+#
 # - No docker socket (by design): the in-container agent cannot manage containers.
 # - Host GitHub config is mounted read-only; tokens are forwarded at runtime via
 #   `${GH_TOKEN:-}` / `${GITHUB_TOKEN:-}` — never baked into the image.
@@ -35,10 +41,66 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # --- runnable application (profile: stack) -----------------------------------
+  # Build the `runtime` stage: a minimal Alpine image with the api + worker
+  # binaries. Both migrate on startup; migrations serialize on a Postgres
+  # advisory lock, so running both concurrently is safe.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    profiles: ["stack"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://taskqueue@db:5432/taskqueue?sslmode=disable
+    ports:
+      # Serves the HTTP API and the embedded dashboard. Override API_PORT if 8080
+      # is taken on the host. (The dev sandbox uses HOST_PORT, a different var, so
+      # the two can run side by side.)
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      # Hits the API and the DB in one probe: /v1/queues queries the jobs table.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/v1/queues"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    profiles: ["stack"]
+    # The runtime stage's ENTRYPOINT is the API; override it for the worker.
+    entrypoint: ["/usr/local/bin/worker"]
+    command:
+      - "-queues"
+      - "default"
+      - "-concurrency"
+      - "4"
+      - "-poll-interval"
+      - "500ms"
+      - "-lease"
+      - "30s"
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://taskqueue@db:5432/taskqueue?sslmode=disable
+    restart: unless-stopped
+
   dev:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
       args:
         HOST_UID: ${HOST_UID:-1000}
         HOST_GID: ${HOST_GID:-1000}
