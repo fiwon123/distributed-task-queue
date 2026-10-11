@@ -31,9 +31,10 @@ Once built, you can run the API and one or more workers and:
 
 ## Status
 
-**Repository setup only — no implementation yet.** The working tree contains the
-project's workflow, agent configuration, CI, and project context. Code lands in
-the build order below.
+**Phase 1 landed — schema + enqueue/status API.** The `jobs` table migration and
+the `POST /v1/jobs` / `GET /v1/jobs/{id}` endpoints are implemented and tested.
+Workers, concurrent claiming, retries, leases, dead-letter, and the dashboard
+land in the build order below.
 
 ## Stack
 
@@ -46,7 +47,10 @@ the build order below.
 - **Testing**: standard `testing` package (`go test`); Postgres integration tests
   gated behind a build tag
 
-## API (planned)
+## API
+
+Implemented: `POST /v1/jobs` and `GET /v1/jobs/{id}`. The remaining endpoints
+arrive in later phases.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -71,13 +75,13 @@ the build order below.
 
 ## Build order
 
-1. Schema + enqueue/status: `jobs` table + `POST /v1/jobs`, `GET /v1/jobs/{id}`
-2. One worker: poll, run, mark completed/failed
-3. Concurrent claiming: `FOR UPDATE SKIP LOCKED`; test with two workers
-4. Retries: attempts + exponential backoff; dead at `max_attempts`
-5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
-6. Dead-letter: dead state + requeue endpoint
-7. Graceful shutdown: stop claiming and drain
+- [x] 1. Schema + enqueue/status: `jobs` table + `POST /v1/jobs`, `GET /v1/jobs/{id}`
+- [ ] 2. One worker: poll, run, mark completed/failed
+- [ ] 3. Concurrent claiming: `FOR UPDATE SKIP LOCKED`; test with two workers
+- [ ] 4. Retries: attempts + exponential backoff; dead at `max_attempts`
+- [ ] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
+- [ ] 6. Dead-letter: dead state + requeue endpoint
+- [ ] 7. Graceful shutdown: stop claiming and drain
 
 ## Done when
 
@@ -110,9 +114,9 @@ go build ./...       # build
 go test ./...        # test
 go vet ./...         # static analysis
 gofmt -l .           # formatting (empty output = clean)
-go run ./cmd/api     # run the HTTP API (once implemented)
+go run ./cmd/api     # run the HTTP API
 go run ./cmd/worker  # run a worker (once implemented)
-make check           # all of the above (Go steps skip until go.mod exists)
+make check           # gofmt + vet + test + build (the local gate)
 ```
 
 The project follows an issue-first, branch-based workflow — see

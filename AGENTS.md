@@ -77,13 +77,18 @@ distributed-task-queue/
 ## Development Commands
 
 ```bash
-go build ./...           # build all packages
-go vet ./...             # static analysis
-go test ./...            # run tests
-gofmt -l .               # list unformatted files (empty = clean)
-go run ./cmd/api         # run the HTTP API (once implemented)
-go run ./cmd/worker      # run a worker (once implemented)
+go build ./...                  # build all packages
+go vet ./...                    # static analysis
+go test ./...                   # run tests
+go test -tags integration ./... # run Postgres integration tests (needs DATABASE_URL)
+gofmt -l .                      # list unformatted files (empty = clean)
+go run ./cmd/api                # run the HTTP API
+go run ./cmd/worker             # run a worker (once implemented)
 ```
+
+Integration tests are gated behind `//go:build integration` and skip when
+`DATABASE_URL` is unset, so `go test ./...` needs no services. Run them against
+the dev Postgres from the sandbox (`DATABASE_URL` points at hostname `db`).
 
 ### Run All Checks
 

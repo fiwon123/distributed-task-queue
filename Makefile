@@ -26,9 +26,13 @@ check:
 	  $(MAKE) fmt vet test build; \
 	fi
 
+# Format only the Go files git knows about (tracked + untracked, minus
+# gitignored). This keeps dependency caches that live under the repo — in the
+# dev sandbox GOPATH/GOMODCACHE is /workspace/.go — out of the check, which
+# `gofmt -l .` would otherwise walk.
 fmt:
 	@echo "==> gofmt"
-	@out="$$(gofmt -l .)"; \
+	@out="$$(git ls-files -co --exclude-standard -z -- '*.go' | xargs -0 -r gofmt -l)"; \
 	if [ -n "$$out" ]; then echo "unformatted files:"; echo "$$out"; exit 1; fi
 
 vet:
