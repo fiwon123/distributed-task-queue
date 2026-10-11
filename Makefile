@@ -12,7 +12,7 @@ NPM ?= npm
         web-install web-deps web-build web-test web-lint web-check \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
         shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
-        stack-up stack-down stack-logs stack-ps stack-reset demo
+        prod-up prod-down prod-logs prod-ps prod-reset demo
 
 # Extra flags for the opencode invocation. `make opencode-auto` /
 # `make dev-opencode-auto` set this to --auto, which auto-approves permissions
@@ -99,65 +99,70 @@ preflight: ## Check host prerequisites for the dev sandbox
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 	@scripts/resolve-gh-token.sh --check >/dev/null 2>&1 || true
 
-dev-up: preflight ## Build and start the dev sandbox + Postgres
-	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose up -d --build
+dev-up: preflight ## Build and start the development stack (db + dev sandbox + worker)
+	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d --build
+	@echo ""
+	@echo "  dev API (air):  http://localhost:$${HOST_PORT:-8081}/"
+	@echo "  seed jobs:      API_URL=http://localhost:$${HOST_PORT:-8081} make demo"
+	@echo "  logs:           make dev-log"
+	@echo ""
 
 dev-restart: preflight ## Restart the dev container after Dockerfile/deps changes
-	@docker compose restart dev
+	@docker compose --profile dev restart dev
 
-dev-down: ## Stop and remove the dev sandbox
-	@docker compose down
+dev-down: ## Stop and remove the development stack (db + dev sandbox + worker)
+	@docker compose --profile dev down
 
-dev-log: ## Follow dev container logs
-	@docker compose logs -f dev
+dev-log: ## Follow dev sandbox + worker logs
+	@docker compose --profile dev logs -f dev worker
 
 dev-build: preflight ## Rebuild the dev image without starting
-	@docker compose build
+	@docker compose --profile dev build
 
-reset: ## Stop the dev sandbox and remove the Postgres volume
-	@docker compose down -v
+reset: ## Stop both stacks and remove the Postgres volume
+	@docker compose --profile dev --profile prod down -v
 
 shell: dev-shell ## Alias for dev-shell
 opencode: dev-opencode ## Alias for dev-opencode (run opencode inside the sandbox)
 opencode-auto: dev-opencode-auto ## Alias for dev-opencode-auto (run opencode with --auto)
 
 dev-shell: preflight ## Open a shell in the dev container
-	@docker compose exec dev bash || docker compose run --rm dev bash
+	@docker compose --profile dev exec dev bash || docker compose --profile dev run --rm dev bash
 
 dev-opencode: preflight ## Run opencode inside the dev sandbox
-	@if [ -z "$$(docker compose ps -q dev 2>/dev/null)" ]; then echo "[opencode] starting dev stack..."; HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose up -d dev; fi
-	@if [ -t 0 ]; then docker compose exec -it dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose exec -it dev bash -lc "opencode $(OPENCODE_ARGS)"; else docker compose exec -T dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose exec -T dev bash -lc "opencode $(OPENCODE_ARGS)"; fi
+	@if [ -z "$$(docker compose --profile dev ps -q dev 2>/dev/null)" ]; then echo "[opencode] starting dev stack..."; HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d dev; fi
+	@if [ -t 0 ]; then docker compose --profile dev exec -it dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose --profile dev exec -it dev bash -lc "opencode $(OPENCODE_ARGS)"; else docker compose --profile dev exec -T dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose --profile dev exec -T dev bash -lc "opencode $(OPENCODE_ARGS)"; fi
 
 # Same recipe, with --auto: auto-approve permissions that are not explicitly
 # denied (every secret-file deny rule still applies).
 dev-opencode-auto: OPENCODE_ARGS = --auto
 dev-opencode-auto: dev-opencode ## Run opencode inside the dev sandbox with --auto
 
-# --- Runnable stack (docker compose, profile: stack) ---------------------------
+# --- Production stack (docker compose, profile: prod) --------------------------
 # Brings up Postgres + API + worker from the `runtime` image; the API serves the
-# embedded dashboard at / and the OpenAPI docs at /docs. Gated behind a compose
-# profile so `make dev-up` (the dev sandbox) is unaffected.
+# embedded dashboard at / and the OpenAPI docs at /docs. Gated behind the `prod`
+# profile so it never drags in the dev sandbox.
 
-stack-up: ## Build + start the app stack (db + api + worker), in the background
-	@docker compose --profile stack up -d --build
+prod-up: ## Build + start the production stack (db + api + worker), in the background
+	@docker compose --profile prod up -d --build
 	@echo ""
 	@echo "  dashboard:  http://localhost:$${API_PORT:-8080}/"
 	@echo "  API docs:   http://localhost:$${API_PORT:-8080}/docs"
 	@echo "  seed jobs:  make demo"
-	@echo "  logs:       make stack-logs"
+	@echo "  logs:       make prod-logs"
 	@echo ""
 
-stack-down: ## Stop the app stack (keeps the Postgres volume)
-	@docker compose --profile stack down
+prod-down: ## Stop the production stack (keeps the Postgres volume)
+	@docker compose --profile prod down
 
-stack-logs: ## Follow api + worker logs
-	@docker compose --profile stack logs -f api worker
+prod-logs: ## Follow api + worker logs
+	@docker compose --profile prod logs -f api worker
 
-stack-ps: ## Show app-stack service status
-	@docker compose --profile stack ps
+prod-ps: ## Show production-stack service status
+	@docker compose --profile prod ps
 
-stack-reset: ## Stop the app stack and delete the Postgres volume
-	@docker compose --profile stack down -v
+prod-reset: ## Stop the production stack and delete the Postgres volume
+	@docker compose --profile prod down -v
 
 demo: ## Enqueue demo jobs against the running stack (needs curl)
 	@scripts/demo.sh

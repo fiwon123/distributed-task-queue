@@ -29,13 +29,17 @@ Once built, you can run the API and one or more workers and:
 - inspect dead-lettered jobs and requeue them;
 - read per-queue statistics.
 
-## Run the whole stack
+## Two ways to run it
 
-With Docker installed, one command builds the API and worker images, starts
-Postgres, applies migrations, and brings up both processes:
+There are two independent Docker Compose stacks, gated behind separate Compose
+profiles. Both use the same `db` service, so run one at a time.
+
+### Production (the real app)
+
+Builds the runtime image and runs the API + worker:
 
 ```bash
-make stack-up     # db + api + worker (Docker Compose, profile: stack)
+make prod-up      # db + api + worker (compose profile: prod)
 make demo         # enqueue a few jobs so the dashboard has something to show
 ```
 
@@ -44,13 +48,28 @@ Then open:
 - **Dashboard** — <http://localhost:8080/>
 - **API docs** — <http://localhost:8080/docs>
 
-Follow the worker as it processes the demo jobs with `make stack-logs`. Set
-`API_PORT` if `8080` is taken on the host. Tear down with `make stack-down`
-(keeps data) or `make stack-reset` (also deletes the Postgres volume).
+Follow the worker as it processes the demo jobs with `make prod-logs`. Set
+`API_PORT` if `8080` is taken on the host. Tear down with `make prod-down`
+(keeps data) or `make prod-reset` (also deletes the Postgres volume).
 
-The runnable stack lives behind a Compose *profile* (`stack`), so it is separate
-from the `dev` sandbox used for development — the two never start together by
-accident. `make demo` needs `curl` on the host and is safe to run repeatedly.
+### Development (edit code, fast reload)
+
+The dev sandbox runs the API through `air` (fast reload) and adds a worker, so
+enqueued jobs actually get processed while you edit:
+
+```bash
+make dev-up       # db + dev sandbox + worker (compose profile: dev)
+API_URL=http://localhost:8081 make demo   # sandbox API listens on HOST_PORT (:8081)
+```
+
+The sandbox API is on <http://localhost:8081/> (override with `HOST_PORT`). For a
+shell inside the sandbox use `make shell`; to run opencode use `make opencode`.
+The API hot-reloads on Go changes; the worker is a built image, so it picks up
+worker changes on the next `make dev-up`.
+
+`make demo` needs `curl` on the host and is safe to run repeatedly. Because each
+stack is behind its own profile, `make prod-up` never starts the dev sandbox (and
+vice versa).
 
 ## Status
 
@@ -61,10 +80,10 @@ jobs abandoned by a dead worker, dead-letter requeue, per-queue stats, graceful
 shutdown, and a small web dashboard (bundled into the API binary) for browsing
 queues and jobs.
 
-The whole stack also runs with one command — `make stack-up` starts Postgres, the
+The whole stack also runs with one command — `make prod-up` starts Postgres, the
 API, and a worker via Docker Compose — and the API serves its own OpenAPI
 document at `/openapi.yaml` with an interactive UI at `/docs`. See
-[Run the whole stack](#run-the-whole-stack) and [API reference](#api-reference).
+[Two ways to run it](#two-ways-to-run-it) and [API reference](#api-reference).
 
 ## Stack
 
@@ -152,13 +171,13 @@ fast reload) with your host GitHub config mounted read-only and
 `db` service provides PostgreSQL; the sandbox reaches it at hostname `db`.
 
 ```bash
-make dev-up        # build + start the sandbox and Postgres (needs docker on the host)
+make dev-up        # build + start the dev stack (db + sandbox + worker; needs docker on the host)
 make dev-restart   # restart after Dockerfile/deps changes
 make shell         # shell inside the sandbox
 make opencode      # run opencode inside the sandbox
-make dev-log       # follow container logs
-make dev-down      # stop and remove the sandbox
-make reset         # stop and remove the sandbox, including the Postgres volume
+make dev-log       # follow sandbox + worker logs
+make dev-down      # stop and remove the dev stack (db + sandbox + worker)
+make reset         # stop both stacks and remove the Postgres volume
 ```
 
 Direct toolchain (host or inside the sandbox):
