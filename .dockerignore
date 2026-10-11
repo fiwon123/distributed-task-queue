@@ -1,0 +1,14 @@
+.git
+.gitignore
+.opencode/memory
+.go
+.xdg-data
+.xdg-cache
+.xdg-state
+tmp
+air.log
+api
+worker
+*.test
+*.out
+coverage.*

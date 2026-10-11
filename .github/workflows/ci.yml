@@ -1,0 +1,70 @@
+name: CI
+
+# Go CI for this project. Adapted from the engineering-workflow library's
+# `ci.go.yml.template`, flattened to a single module at the repo root (the
+# template parameterizes a `<component-directory>`; here the module root is `.`).
+# Toolchain only: gofmt, go vet, go test, go build.
+#
+# Action majors are pinned deliberately. Bump them as a reviewed change:
+#   actions/checkout   v7
+#   actions/setup-go   v5
+# checkout v7 requires runner >= v2.327.1. On a self-hosted runner older than
+# that, these steps fail with an opaque error rather than a version complaint.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      # Keep these in sync with the module layout. A hardcoded path here that
+      # the project does not use makes the workflow valid but never triggered --
+      # a silent no-op CI. A `paths:` filter means a change touching nothing
+      # listed does not trigger CI at all, and a triggered run whose jobs are all
+      # gated out reports `skipped`, not `passed`. Skipped is not passed: neither
+      # outcome verifies a change, so run `make check` locally before relying on
+      # CI.
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  go-check:
+    name: Go (fmt, vet, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Pin a version here once `go.mod` exists (e.g. `go-version-file: go.mod`)
+          # so CI and local development agree on the toolchain.
+          go-version: "stable"
+          cache: true
+
+      - name: Check formatting
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "The following files are not gofmt-clean:"
+            echo "$out"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build ./...

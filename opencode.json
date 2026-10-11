@@ -1,0 +1,286 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", "PROJECT_CONTEXT.md", ".opencode/instructions/*.md"],
+  "permission": {
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.envrc": "deny",
+      "*.env.example": "allow"
+    },
+    "bash": {
+      "*": "ask",
+      "printenv*": "deny",
+      "env": "deny",
+      "env *": "deny",
+      "docker compose config*": "deny",
+      "docker-compose config*": "deny",
+      "docker * config*": "deny",
+      "docker * env": "deny",
+      "docker * env *": "deny",
+      "docker inspect*": "deny",
+      "*.env": "deny",
+      "*.envrc": "deny",
+      "* .env": "deny",
+      "* .envrc": "deny",
+      "*/.env": "deny",
+      "*/.envrc": "deny",
+      "* .env*": "deny",
+      "*/.env*": "deny",
+      "* .envrc*": "deny",
+      "*/.envrc*": "deny",
+      "*.env.*": "deny",
+      "* .env.*": "deny",
+      "*/.env.*": "deny"
+    },
+    "edit": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.envrc": "deny",
+      "*.env.example": "allow"
+    }
+  },
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "model": "opencode/big-pickle",
+      "permission": {
+        "edit": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.envrc": "deny",
+          "*.env.example": "allow"
+        },
+        "bash": {
+          "*": "ask",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "git branch*": "allow",
+          "git checkout*": "allow",
+          "git pull*": "allow",
+          "git push*": "allow",
+          "git add*": "allow",
+          "git commit*": "allow",
+          "gh issue*": "allow",
+          "gh pr create*": "allow",
+          "gh pr comment*": "allow",
+          "gh pr edit*": "allow",
+          "gh pr list*": "allow",
+          "gh pr view*": "allow",
+          "gh pr checks*": "allow",
+          "gh label*": "allow",
+          "gh pr merge*": "allow",
+          "go build*": "allow",
+          "go test*": "allow",
+          "go vet*": "allow",
+          "go run*": "allow",
+          "gofmt*": "allow",
+          "make*": "allow",
+          "printenv*": "deny",
+          "env": "deny",
+          "env *": "deny",
+          "docker compose config*": "deny",
+          "docker-compose config*": "deny",
+          "docker * config*": "deny",
+          "docker * env": "deny",
+          "docker * env *": "deny",
+          "docker inspect*": "deny",
+          "*.env": "deny",
+          "*.envrc": "deny",
+          "* .env": "deny",
+          "* .envrc": "deny",
+          "*/.env": "deny",
+          "*/.envrc": "deny",
+          "* .env*": "deny",
+          "*/.env*": "deny",
+          "* .envrc*": "deny",
+          "*/.envrc*": "deny",
+          "*.env.*": "deny",
+          "* .env.*": "deny",
+          "*/.env.*": "deny"
+        },
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "reviewer": "allow"
+        },
+        "skill": {
+          "*": "allow"
+        }
+      }
+    },
+    "plan": {
+      "mode": "primary",
+      "model": "opencode/mimo-v2.6-flash-free",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "git log*": "allow",
+          "git diff*": "allow",
+          "ls*": "allow",
+          "printenv*": "deny",
+          "env": "deny",
+          "env *": "deny",
+          "docker compose config*": "deny",
+          "docker-compose config*": "deny",
+          "docker * config*": "deny",
+          "docker * env": "deny",
+          "docker * env *": "deny",
+          "docker inspect*": "deny",
+          "*.env": "deny",
+          "*.envrc": "deny",
+          "* .env": "deny",
+          "* .envrc": "deny",
+          "*/.env": "deny",
+          "*/.envrc": "deny",
+          "* .env*": "deny",
+          "*/.env*": "deny",
+          "* .envrc*": "deny",
+          "*/.envrc*": "deny",
+          "*.env.*": "deny",
+          "* .env.*": "deny",
+          "*/.env.*": "deny"
+        },
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "reviewer": "allow"
+        },
+        "skill": {
+          "*": "allow"
+        }
+      }
+    },
+    "reviewer": {
+      "description": "Reviews code for bugs, security issues, and regressions without editing",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": {
+          "*": "deny",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "grep *": "allow",
+          "grep *.env": "deny",
+          "grep *.env.*": "deny",
+          "grep *.envrc": "deny",
+          "printenv*": "deny",
+          "env": "deny",
+          "env *": "deny",
+          "docker compose config*": "deny",
+          "docker-compose config*": "deny",
+          "docker * config*": "deny",
+          "docker * env": "deny",
+          "docker * env *": "deny",
+          "docker inspect*": "deny",
+          "*.env": "deny",
+          "*.envrc": "deny",
+          "* .env": "deny",
+          "* .envrc": "deny",
+          "*/.env": "deny",
+          "*/.envrc": "deny",
+          "* .env*": "deny",
+          "*/.env*": "deny",
+          "* .envrc*": "deny",
+          "*/.envrc*": "deny",
+          "*.env.*": "deny",
+          "* .env.*": "deny",
+          "*/.env.*": "deny"
+        },
+        "skill": {
+          "*": "allow"
+        }
+      }
+    },
+    "backend": {
+      "description": "Implements the Go HTTP API, the job store, and the worker",
+      "mode": "subagent",
+      "permission": {
+        "edit": {
+          "internal/**": "allow",
+          "cmd/**": "allow"
+        },
+        "bash": {
+          "*": "ask",
+          "go build*": "allow",
+          "go test*": "allow",
+          "go vet*": "allow",
+          "go run*": "allow",
+          "gofmt*": "allow",
+          "make*": "allow",
+          "printenv*": "deny",
+          "env": "deny",
+          "env *": "deny",
+          "docker compose config*": "deny",
+          "docker-compose config*": "deny",
+          "docker * config*": "deny",
+          "docker * env": "deny",
+          "docker * env *": "deny",
+          "docker inspect*": "deny",
+          "*.env": "deny",
+          "*.envrc": "deny",
+          "* .env": "deny",
+          "* .envrc": "deny",
+          "*/.env": "deny",
+          "*/.envrc": "deny",
+          "* .env*": "deny",
+          "*/.env*": "deny",
+          "* .envrc*": "deny",
+          "*/.envrc*": "deny",
+          "*.env.*": "deny",
+          "* .env.*": "deny",
+          "*/.env.*": "deny"
+        }
+      }
+    },
+    "tester": {
+      "description": "Writes and runs Go tests for the httpapi, queue, and worker packages",
+      "mode": "subagent",
+      "permission": {
+        "edit": {
+          "**/*_test.go": "allow",
+          "**/testdata/**": "allow",
+          "**/*.env": "deny",
+          "**/*.env.*": "deny",
+          "**/*.env.example": "allow",
+          "**/*.envrc": "deny"
+        },
+        "bash": {
+          "*": "ask",
+          "go test*": "allow",
+          "go vet*": "allow",
+          "go build*": "allow",
+          "gofmt*": "allow",
+          "make*": "allow",
+          "printenv*": "deny",
+          "env": "deny",
+          "env *": "deny",
+          "docker compose config*": "deny",
+          "docker-compose config*": "deny",
+          "docker * config*": "deny",
+          "docker * env": "deny",
+          "docker * env *": "deny",
+          "docker inspect*": "deny",
+          "*.env": "deny",
+          "*.envrc": "deny",
+          "* .env": "deny",
+          "* .envrc": "deny",
+          "*/.env": "deny",
+          "*/.envrc": "deny",
+          "* .env*": "deny",
+          "*/.env*": "deny",
+          "* .envrc*": "deny",
+          "*/.envrc*": "deny",
+          "*.env.*": "deny",
+          "* .env.*": "deny",
+          "*/.env.*": "deny"
+        }
+      }
+    }
+  }
+}

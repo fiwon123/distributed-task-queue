@@ -1,0 +1,6 @@
+# mise.toml — single source of truth for the project toolchain (host + dev image).
+# The Dockerfile base image (golang:1.26-bookworm) and the gh tarball pin must
+# stay in sync with the versions here.
+[tools]
+go = "1.26"
+gh = "2.102.0"

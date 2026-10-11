@@ -1,0 +1,72 @@
+# Dev sandbox compose file — a `dev` service for local development plus a `db`
+# service (PostgreSQL) that the dev service waits to become healthy.
+#
+# - No docker socket (by design): the in-container agent cannot manage containers.
+# - Host GitHub config is mounted read-only; tokens are forwarded at runtime via
+#   `${GH_TOKEN:-}` / `${GITHUB_TOKEN:-}` — never baked into the image.
+# - The Dockerfile creates `devuser` matching HOST_UID/HOST_GID (passed as build
+#   args) so the image has a passwd entry + /home/devuser for the runtime user —
+#   without it the shell greets the user with "I have no name!".
+# - Go module/build caches live under /workspace/.go so the non-root user can
+#   write them (GOPATH/GOCACHE default to root-owned /go).
+# - opencode/gh runtime state goes under /workspace/.xdg-* (writable), while
+#   config stays read-only at .../.config/{opencode,gh}.
+#
+# The `db` credentials are deliberately empty/trust: this is a throwaway local
+# Postgres bound to localhost for development, never a deployed one. To avoid a
+# port clash with a database already on the host, set POSTGRES_PORT.
+name: distributed-task-queue
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=taskqueue
+      - POSTGRES_DB=taskqueue
+      # Local dev only: trust auth, no password. Never use this outside the sandbox.
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskqueue -d taskqueue"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["./scripts/dev-entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://taskqueue@db:5432/taskqueue?sslmode=disable
+      - GH_TOKEN=${GH_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - HOME=/home/devuser
+      - GOPATH=/workspace/.go
+      - GOCACHE=/workspace/.go/cache
+      - XDG_DATA_HOME=/workspace/.xdg-data
+      - XDG_CACHE_HOME=/workspace/.xdg-cache
+      - XDG_STATE_HOME=/workspace/.xdg-state
+    volumes:
+      - .:/workspace:cached
+      - ${HOST_HOME:-${HOME}}/.config/gh:/home/devuser/.config/gh:ro
+      - ${HOST_HOME:-${HOME}}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
+      - ${HOST_HOME:-${HOME}}/.config/opencode:/home/devuser/.config/opencode:ro
+      - ${HOST_HOME:-${HOME}}/.gitconfig:/home/devuser/.gitconfig:ro
+
+volumes:
+  pgdata:
