@@ -113,15 +113,19 @@ PostgreSQL for local development. Host-only tools are bootstrapped with
 `./scripts/setup-host-tools.sh` (installs mise, authenticates gh). Key targets:
 
 ```bash
-make dev-up        # build + start the sandbox and Postgres (requires docker on the host)
+make dev-up        # build + start the dev stack: db + sandbox + worker (needs docker on the host)
 make dev-restart   # restart the dev container after Dockerfile/deps changes
 make dev-shell     # shell inside the container (alias: make shell)
 make dev-opencode  # run opencode inside the container (alias: make opencode)
-make dev-log       # follow container logs
-make dev-down      # stop and remove the sandbox
+make dev-log       # follow sandbox + worker logs
+make dev-down      # stop and remove the dev stack (db + sandbox + worker)
+make prod-up       # build + start the production stack: db + api + worker (runtime image)
+make prod-down     # stop and remove the production stack
 ```
 
-`make dev-up` forwards `GH_TOKEN` or `GITHUB_TOKEN` (whichever is valid) into
+The two stacks select their services via compose profiles (`dev` / `prod`) and
+share one `db` service, so run one at a time. `make dev-up` forwards
+`GH_TOKEN` or `GITHUB_TOKEN` (whichever is valid) into
 the container at runtime — values stay in the host environment, never in the
 image. Host `~/.config/gh`, `~/.config/opencode`, `~/.gitconfig`, and the
 `opencode` binary are mounted read-only. Go module/build caches live under
@@ -188,7 +192,7 @@ host, `./scripts/setup-host-tools.sh` bootstraps mise + gh.
 
 - **Assignee**: `fiwon123` — `workflow.md` tells agents to read `ASSIGNEE` from here before assigning issues and PRs
 - **GitHub credentials**: `GH_TOKEN` or `GITHUB_TOKEN` — either name works. Do not set either here: values belong in the host environment, and the dev sandbox forwards whichever is valid at runtime.
-- **Dev sandbox**: docker compose `dev` + `db` services (gh + opencode pre-configured, no docker socket); `make dev-up` / `dev-restart` / `dev-shell` / `dev-opencode` / `dev-down`
+- **Dev sandbox**: docker compose `dev` + `db` services (gh + opencode pre-configured, no docker socket); `make dev-up` / `dev-restart` / `dev-shell` / `dev-opencode` / `dev-down`. A separate `prod` profile/stack (`make prod-up` / `prod-down`) runs the runtime `api` + `worker`; the two share one `db`, so run one at a time
 - **Model assignments**: an example, not a recommendation — `opencode.json` assigns `opencode/big-pickle` to `build` and `opencode/mimo-v2.6-flash-free` to `plan`. Change them to whatever your install offers; no prompt depends on which model an agent runs. Verify an id with `opencode models` first.
 - Linting / formatting: `gofmt` for all Go code; `go vet` for static analysis
 - Testing: the standard `testing` package (`go test ./...`); Postgres integration tests are gated behind a build tag so unit tests need no services
