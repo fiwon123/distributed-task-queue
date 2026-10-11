@@ -31,10 +31,11 @@ Once built, you can run the API and one or more workers and:
 
 ## Status
 
-**Phase 1 landed — schema + enqueue/status API.** The `jobs` table migration and
-the `POST /v1/jobs` / `GET /v1/jobs/{id}` endpoints are implemented and tested.
-Workers, concurrent claiming, retries, leases, dead-letter, and the dashboard
-land in the build order below.
+**Phase 2 landed — workers, claiming, retries, and leases.** The `jobs` table,
+`POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool that claims jobs with
+`FOR UPDATE SKIP LOCKED`, exponential-backoff retries, and lease-based recovery
+of jobs abandoned by a dead worker are all implemented and tested. Dead-letter
+requeue, queue stats, and the dashboard land in the build order below.
 
 ## Stack
 
@@ -76,10 +77,10 @@ arrive in later phases.
 ## Build order
 
 - [x] 1. Schema + enqueue/status: `jobs` table + `POST /v1/jobs`, `GET /v1/jobs/{id}`
-- [ ] 2. One worker: poll, run, mark completed/failed
-- [ ] 3. Concurrent claiming: `FOR UPDATE SKIP LOCKED`; test with two workers
-- [ ] 4. Retries: attempts + exponential backoff; dead at `max_attempts`
-- [ ] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
+- [x] 2. One worker: poll, run, mark completed/failed
+- [x] 3. Concurrent claiming: `FOR UPDATE SKIP LOCKED`; test with two workers
+- [x] 4. Retries: attempts + exponential backoff; dead at `max_attempts`
+- [x] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
 - [ ] 6. Dead-letter: dead state + requeue endpoint
 - [ ] 7. Graceful shutdown: stop claiming and drain
 
@@ -115,7 +116,7 @@ go test ./...        # test
 go vet ./...         # static analysis
 gofmt -l .           # formatting (empty output = clean)
 go run ./cmd/api     # run the HTTP API
-go run ./cmd/worker  # run a worker (once implemented)
+go run ./cmd/worker  # run a worker
 make check           # gofmt + vet + test + build (the local gate)
 ```
 
