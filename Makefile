@@ -8,13 +8,12 @@ GO ?= go
 
 .PHONY: help check fmt vet test build run run-worker clean \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
-        shell opencode dev-shell dev-opencode
+        shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto
 
-# Opt-in: `make opencode AUTO=1` (or `make dev-opencode AUTO=1`) adds --auto —
-# opencode auto-approves permissions that are not explicitly denied; the
-# secret-file deny rules still apply. Default: prompt.
-AUTO ?= 0
-OPENCODE_AUTO := $(if $(filter 1 true yes on,$(AUTO)), --auto,)
+# Extra flags for the opencode invocation. `make opencode-auto` /
+# `make dev-opencode-auto` set this to --auto, which auto-approves permissions
+# that are not explicitly denied; the secret-file deny rules still apply.
+OPENCODE_ARGS ?=
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
@@ -81,10 +80,16 @@ reset: ## Stop the dev sandbox and remove the Postgres volume
 
 shell: dev-shell ## Alias for dev-shell
 opencode: dev-opencode ## Alias for dev-opencode (run opencode inside the sandbox)
+opencode-auto: dev-opencode-auto ## Alias for dev-opencode-auto (run opencode with --auto)
 
 dev-shell: preflight ## Open a shell in the dev container
 	@docker compose exec dev bash || docker compose run --rm dev bash
 
-dev-opencode: preflight ## Run opencode inside the dev sandbox (AUTO=1 => --auto)
+dev-opencode: preflight ## Run opencode inside the dev sandbox
 	@if [ -z "$$(docker compose ps -q dev 2>/dev/null)" ]; then echo "[opencode] starting dev stack..."; HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose up -d dev; fi
-	@if [ -t 0 ]; then docker compose exec -it dev zsh -lc "cd /workspace && opencode$(OPENCODE_AUTO)" || docker compose exec -it dev bash -lc "opencode$(OPENCODE_AUTO)"; else docker compose exec -T dev zsh -lc "cd /workspace && opencode$(OPENCODE_AUTO)" || docker compose exec -T dev bash -lc "opencode$(OPENCODE_AUTO)"; fi
+	@if [ -t 0 ]; then docker compose exec -it dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose exec -it dev bash -lc "opencode $(OPENCODE_ARGS)"; else docker compose exec -T dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose exec -T dev bash -lc "opencode $(OPENCODE_ARGS)"; fi
+
+# Same recipe, with --auto: auto-approve permissions that are not explicitly
+# denied (every secret-file deny rule still applies).
+dev-opencode-auto: OPENCODE_ARGS = --auto
+dev-opencode-auto: dev-opencode ## Run opencode inside the dev sandbox with --auto
