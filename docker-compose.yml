@@ -50,7 +50,11 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      # Host port only; the API listens on 8080 inside the container. Override
+      # HOST_PORT so this sandbox and sibling projects can run at once — two
+      # containers publishing the same host port means the second cannot program
+      # its mapping and can be left with no network attachment, killing DNS.
+      - "${HOST_PORT:-8081}:8080"
     environment:
       - DATABASE_URL=postgres://taskqueue@db:5432/taskqueue?sslmode=disable
       - GH_TOKEN=${GH_TOKEN:-}
