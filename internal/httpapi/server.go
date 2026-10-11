@@ -17,6 +17,8 @@ import (
 type JobStore interface {
 	Enqueue(ctx context.Context, p queue.EnqueueParams) (queue.Job, error)
 	Get(ctx context.Context, id string) (queue.Job, error)
+	Requeue(ctx context.Context, id string) (queue.Job, error)
+	QueueStats(ctx context.Context, queue string) (queue.Stats, error)
 }
 
 // Server serves the /v1 HTTP API.
@@ -39,6 +41,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/jobs", s.handleEnqueue)
 	mux.HandleFunc("GET /v1/jobs/{id}", s.handleGetJob)
+	mux.HandleFunc("POST /v1/jobs/{id}/requeue", s.handleRequeue)
+	mux.HandleFunc("GET /v1/queues/{name}/stats", s.handleQueueStats)
 	return mux
 }
 

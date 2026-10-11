@@ -14,6 +14,10 @@ import (
 // ErrNotFound is returned when a job id does not exist.
 var ErrNotFound = errors.New("job not found")
 
+// ErrNotRequeueable is returned when a job exists but is not in a state that can
+// be requeued (only dead and failed jobs can).
+var ErrNotRequeueable = errors.New("job is not in a requeueable state")
+
 // Store persists jobs in PostgreSQL. It is safe for concurrent use.
 type Store struct {
 	pool *pgxpool.Pool
@@ -110,4 +114,92 @@ func scanJob(row rowScanner) (Job, error) {
 	j.Payload = json.RawMessage(payload)
 	j.Status = Status(status)
 	return j, nil
+}
+
+const requeueSQL = `
+UPDATE jobs
+SET status       = 'pending',
+    attempts     = 0,
+    run_at       = now(),
+    locked_until = NULL,
+    last_error   = NULL,
+    completed_at = NULL
+WHERE id = $1 AND status IN ('dead', 'failed')
+RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
+          run_at, locked_until, last_error, created_at, completed_at`
+
+// Requeue returns a dead or failed job to the queue with a fresh retry budget:
+// status pending, attempts reset to 0, lease and error cleared, run_at now.
+//
+// It returns ErrNotRequeueable when the job exists but is not dead/failed, and
+// ErrNotFound when no such job exists.
+func (s *Store) Requeue(ctx context.Context, id string) (Job, error) {
+	job, err := scanJob(s.pool.QueryRow(ctx, requeueSQL, id))
+	if err == nil {
+		return job, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return Job{}, err
+	}
+
+	// The UPDATE matched no row: either the id is unknown or the job is in a
+	// state that cannot be requeued. Distinguish the two for the caller.
+	_, getErr := s.Get(ctx, id)
+	switch {
+	case errors.Is(getErr, ErrNotFound):
+		return Job{}, ErrNotFound
+	case getErr != nil:
+		return Job{}, getErr
+	default:
+		return Job{}, ErrNotRequeueable
+	}
+}
+
+// Stats is a per-queue breakdown of jobs by status.
+type Stats struct {
+	Queue  string         `json:"queue"`
+	Counts map[Status]int `json:"counts"`
+	Total  int            `json:"total"`
+}
+
+// allStatuses is the fixed order/census reported by QueueStats, so every state
+// appears in the output even when its count is zero.
+var allStatuses = []Status{
+	StatusPending, StatusRunning, StatusCompleted, StatusFailed, StatusDead,
+}
+
+const queueStatsSQL = `
+SELECT status, count(*)
+FROM jobs
+WHERE queue = $1
+GROUP BY status`
+
+// QueueStats returns the count of jobs in each status for a queue. A queue with
+// no jobs reports all-zero counts rather than an error.
+func (s *Store) QueueStats(ctx context.Context, queueName string) (Stats, error) {
+	rows, err := s.pool.Query(ctx, queueStatsSQL, queueName)
+	if err != nil {
+		return Stats{}, fmt.Errorf("queue stats: %w", err)
+	}
+	defer rows.Close()
+
+	stats := Stats{Queue: queueName, Counts: make(map[Status]int, len(allStatuses))}
+	for _, st := range allStatuses {
+		stats.Counts[st] = 0
+	}
+	for rows.Next() {
+		var (
+			status string
+			count  int
+		)
+		if err := rows.Scan(&status, &count); err != nil {
+			return Stats{}, fmt.Errorf("scan queue stats: %w", err)
+		}
+		stats.Counts[Status(status)] = count
+		stats.Total += count
+	}
+	if err := rows.Err(); err != nil {
+		return Stats{}, fmt.Errorf("iterate queue stats: %w", err)
+	}
+	return stats, nil
 }
