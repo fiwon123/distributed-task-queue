@@ -52,6 +52,7 @@ air.log
 
 # Node deps and build byproducts (the built embed bundle in web/dist IS committed)
 node_modules/
+*.tsbuildinfo
 
 # Editor/IDE
 # .idea/
