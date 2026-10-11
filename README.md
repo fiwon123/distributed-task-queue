@@ -31,11 +31,12 @@ Once built, you can run the API and one or more workers and:
 
 ## Status
 
-**Phase 2 landed — workers, claiming, retries, and leases.** The `jobs` table,
+**Phase 3 landed — requeue, stats, and graceful shutdown.** The `jobs` table,
 `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool that claims jobs with
-`FOR UPDATE SKIP LOCKED`, exponential-backoff retries, and lease-based recovery
-of jobs abandoned by a dead worker are all implemented and tested. Dead-letter
-requeue, queue stats, and the dashboard land in the build order below.
+`FOR UPDATE SKIP LOCKED`, exponential-backoff retries, lease-based recovery of
+jobs abandoned by a dead worker, dead-letter requeue, per-queue stats, and
+graceful shutdown are all implemented and tested. Only the dashboard remains in
+the build order below.
 
 ## Stack
 
@@ -50,8 +51,7 @@ requeue, queue stats, and the dashboard land in the build order below.
 
 ## API
 
-Implemented: `POST /v1/jobs` and `GET /v1/jobs/{id}`. The remaining endpoints
-arrive in later phases.
+All four endpoints are implemented.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -81,8 +81,8 @@ arrive in later phases.
 - [x] 3. Concurrent claiming: `FOR UPDATE SKIP LOCKED`; test with two workers
 - [x] 4. Retries: attempts + exponential backoff; dead at `max_attempts`
 - [x] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
-- [ ] 6. Dead-letter: dead state + requeue endpoint
-- [ ] 7. Graceful shutdown: stop claiming and drain
+- [x] 6. Dead-letter: dead state + requeue endpoint
+- [x] 7. Graceful shutdown: stop claiming and drain
 
 ## Done when
 
