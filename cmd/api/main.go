@@ -20,6 +20,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fiwon123/distributed-task-queue/docs"
 	"github.com/fiwon123/distributed-task-queue/internal/httpapi"
 	"github.com/fiwon123/distributed-task-queue/internal/queue"
 	"github.com/fiwon123/distributed-task-queue/migrations"
@@ -75,7 +76,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("locate embedded dashboard: %w", err)
 	}
-	api = api.WithDashboard(dashboard)
+	api = api.WithDashboard(dashboard).WithOpenAPI(docs.FS)
 
 	srv := &http.Server{
 		Addr:              *addr,

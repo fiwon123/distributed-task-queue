@@ -32,6 +32,7 @@ type Server struct {
 	store     JobStore
 	log       *slog.Logger
 	dashboard fs.FS // optional; nil disables the UI
+	apiDocs   fs.FS // optional; serves /openapi.yaml and /docs when set
 }
 
 // New returns a Server backed by store. A nil logger falls back to
@@ -52,19 +53,73 @@ func (s *Server) WithDashboard(fsys fs.FS) *Server {
 	return s
 }
 
+// WithOpenAPI mounts the API documentation: fsys must contain openapi.yaml and
+// docs.html, served at /openapi.yaml and /docs respectively. It returns the
+// receiver for chaining.
+func (s *Server) WithOpenAPI(fsys fs.FS) *Server {
+	s.apiDocs = fsys
+	return s
+}
+
+// route is one method+path binding in the API surface.
+type route struct {
+	method  string
+	pattern string
+	handler http.HandlerFunc
+}
+
+// routes is the single source of truth for the /v1 API surface. Handler
+// registers exactly these, and the OpenAPI drift test in openapi_test.go fails
+// if this list and docs/openapi.yaml disagree.
+func (s *Server) routes() []route {
+	return []route{
+		{http.MethodPost, "/v1/jobs", s.handleEnqueue},
+		{http.MethodGet, "/v1/jobs", s.handleListJobs},
+		{http.MethodGet, "/v1/jobs/{id}", s.handleGetJob},
+		{http.MethodPost, "/v1/jobs/{id}/requeue", s.handleRequeue},
+		{http.MethodGet, "/v1/queues", s.handleListQueues},
+		{http.MethodGet, "/v1/queues/{name}/stats", s.handleQueueStats},
+	}
+}
+
 // Handler builds the routed http.Handler for the API.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/jobs", s.handleEnqueue)
-	mux.HandleFunc("GET /v1/jobs", s.handleListJobs)
-	mux.HandleFunc("GET /v1/jobs/{id}", s.handleGetJob)
-	mux.HandleFunc("POST /v1/jobs/{id}/requeue", s.handleRequeue)
-	mux.HandleFunc("GET /v1/queues", s.handleListQueues)
-	mux.HandleFunc("GET /v1/queues/{name}/stats", s.handleQueueStats)
+	for _, rt := range s.routes() {
+		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler)
+	}
+	if s.apiDocs != nil {
+		mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
+		mux.HandleFunc("GET /docs", s.handleAPIDocs)
+	}
 	if s.dashboard != nil {
 		mux.Handle("/", s.spaHandler())
 	}
 	return mux
+}
+
+// handleOpenAPISpec serves the embedded OpenAPI document.
+func (s *Server) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+	body, err := fs.ReadFile(s.apiDocs, "openapi.yaml")
+	if err != nil {
+		s.log.Error("read openapi spec", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	_, _ = w.Write(body)
+}
+
+// handleAPIDocs serves the embedded Swagger UI page.
+func (s *Server) handleAPIDocs(w http.ResponseWriter, r *http.Request) {
+	body, err := fs.ReadFile(s.apiDocs, "docs.html")
+	if err != nil {
+		s.log.Error("read api docs page", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(body)
 }
 
 // spaHandler serves the embedded dashboard, falling back to index.html for

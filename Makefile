@@ -11,7 +11,8 @@ NPM ?= npm
 .PHONY: help check fmt vet test build run run-worker clean \
         web-install web-deps web-build web-test web-lint web-check \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
-        shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto
+        shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
+        stack-up stack-down stack-logs stack-ps stack-reset demo
 
 # Extra flags for the opencode invocation. `make opencode-auto` /
 # `make dev-opencode-auto` set this to --auto, which auto-approves permissions
@@ -131,3 +132,32 @@ dev-opencode: preflight ## Run opencode inside the dev sandbox
 # denied (every secret-file deny rule still applies).
 dev-opencode-auto: OPENCODE_ARGS = --auto
 dev-opencode-auto: dev-opencode ## Run opencode inside the dev sandbox with --auto
+
+# --- Runnable stack (docker compose, profile: stack) ---------------------------
+# Brings up Postgres + API + worker from the `runtime` image; the API serves the
+# embedded dashboard at / and the OpenAPI docs at /docs. Gated behind a compose
+# profile so `make dev-up` (the dev sandbox) is unaffected.
+
+stack-up: ## Build + start the app stack (db + api + worker), in the background
+	@docker compose --profile stack up -d --build
+	@echo ""
+	@echo "  dashboard:  http://localhost:$${API_PORT:-8080}/"
+	@echo "  API docs:   http://localhost:$${API_PORT:-8080}/docs"
+	@echo "  seed jobs:  make demo"
+	@echo "  logs:       make stack-logs"
+	@echo ""
+
+stack-down: ## Stop the app stack (keeps the Postgres volume)
+	@docker compose --profile stack down
+
+stack-logs: ## Follow api + worker logs
+	@docker compose --profile stack logs -f api worker
+
+stack-ps: ## Show app-stack service status
+	@docker compose --profile stack ps
+
+stack-reset: ## Stop the app stack and delete the Postgres volume
+	@docker compose --profile stack down -v
+
+demo: ## Enqueue demo jobs against the running stack (needs curl)
+	@scripts/demo.sh

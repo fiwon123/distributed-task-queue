@@ -4,7 +4,8 @@ name: CI
 # `ci.go.yml.template`, flattened to a single module at the repo root (the
 # template parameterizes a `<component-directory>`; here the module root is `.`).
 # Toolchain: the Go gates (gofmt, vet, test, build) plus the web dashboard
-# (oxlint, oxfmt, vitest, vite build).
+# (oxlint, oxfmt, vitest, vite build). A second job (`stack`) builds the runtime
+# Docker image and runs the full stack end to end.
 #
 # Action majors are pinned deliberately. Bump them as a reviewed change:
 #   actions/checkout    v7
@@ -28,6 +29,10 @@ on:
       - "go.mod"
       - "go.sum"
       - "web/**"
+      - "docs/**"
+      - "scripts/**"
+      - "Dockerfile"
+      - "docker-compose.yml"
       - ".github/workflows/**"
   workflow_dispatch:
 
@@ -108,3 +113,63 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+  # Build the runtime image and exercise the whole application the way a user
+  # runs it: Postgres + API + worker via the `stack` compose profile, seed the
+  # demo jobs, and verify the worker drains them to `completed`/`dead`. This is
+  # the only job that actually builds the Dockerfile, so it is what verifies the
+  # `runtime` stage and docker-compose wiring.
+  stack:
+    name: Docker stack (build, run, e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build and start the stack
+        run: docker compose --profile stack up -d --build
+
+      - name: Wait for the API
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/v1/queues >/dev/null 2>&1; then
+              echo "API is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become ready" >&2
+          docker compose --profile stack logs
+          exit 1
+
+      - name: Seed demo jobs
+        run: ./scripts/demo.sh
+
+      # The demo enqueues two `echo` jobs and one `sleep` job (all complete) plus
+      # one `fail` job with max_attempts=2 (retries once, then dead-letters).
+      - name: Wait for the worker to drain the demo jobs
+        run: |
+          base=http://localhost:8080
+          for _ in $(seq 1 30); do
+            completed=$(curl -fsS "$base/v1/jobs?status=completed&limit=500" | grep -o '"count":[0-9]*' | cut -d: -f2)
+            dead=$(curl -fsS "$base/v1/jobs?status=dead&limit=500" | grep -o '"count":[0-9]*' | cut -d: -f2)
+            echo "completed=${completed:-0} dead=${dead:-0}"
+            if [ "${completed:-0}" -ge 3 ] && [ "${dead:-0}" -ge 1 ]; then
+              echo "worker processed the demo jobs"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "demo jobs were not processed in time" >&2
+          exit 1
+
+      - name: Stack status
+        if: always()
+        run: |
+          curl -fsS http://localhost:8080/v1/queues || true
+          echo
+          docker compose --profile stack ps || true
+          docker compose --profile stack logs api worker || true
+
+      - name: Tear down
+        if: always()
+        run: docker compose --profile stack down -v

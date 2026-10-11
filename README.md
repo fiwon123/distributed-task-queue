@@ -29,14 +29,42 @@ Once built, you can run the API and one or more workers and:
 - inspect dead-lettered jobs and requeue them;
 - read per-queue statistics.
 
+## Run the whole stack
+
+With Docker installed, one command builds the API and worker images, starts
+Postgres, applies migrations, and brings up both processes:
+
+```bash
+make stack-up     # db + api + worker (Docker Compose, profile: stack)
+make demo         # enqueue a few jobs so the dashboard has something to show
+```
+
+Then open:
+
+- **Dashboard** — <http://localhost:8080/>
+- **API docs** — <http://localhost:8080/docs>
+
+Follow the worker as it processes the demo jobs with `make stack-logs`. Set
+`API_PORT` if `8080` is taken on the host. Tear down with `make stack-down`
+(keeps data) or `make stack-reset` (also deletes the Postgres volume).
+
+The runnable stack lives behind a Compose *profile* (`stack`), so it is separate
+from the `dev` sandbox used for development — the two never start together by
+accident. `make demo` needs `curl` on the host and is safe to run repeatedly.
+
 ## Status
 
-**Phase 4 landed — the dashboard is done.** The full MVP is now implemented and
-tested: the `jobs` table, `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool
-that claims jobs with `FOR UPDATE SKIP LOCKED`, exponential-backoff retries,
-lease-based recovery of jobs abandoned by a dead worker, dead-letter requeue,
-per-queue stats, graceful shutdown, and a small web dashboard (bundled into the
-API binary) for browsing queues and jobs.
+**MVP complete.** The full feature set is implemented and tested: the `jobs`
+table, `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool that claims jobs with
+`FOR UPDATE SKIP LOCKED`, exponential-backoff retries, lease-based recovery of
+jobs abandoned by a dead worker, dead-letter requeue, per-queue stats, graceful
+shutdown, and a small web dashboard (bundled into the API binary) for browsing
+queues and jobs.
+
+The whole stack also runs with one command — `make stack-up` starts Postgres, the
+API, and a worker via Docker Compose — and the API serves its own OpenAPI
+document at `/openapi.yaml` with an interactive UI at `/docs`. See
+[Run the whole stack](#run-the-whole-stack) and [API reference](#api-reference).
 
 ## Stack
 
@@ -53,7 +81,9 @@ API binary) for browsing queues and jobs.
 
 ## API
 
-All five JSON endpoints are implemented, plus the dashboard is served at `/`.
+All five JSON endpoints are implemented. The dashboard is served at `/`, and the
+API serves its own documentation: the raw OpenAPI 3 document at `/openapi.yaml`
+and an interactive Swagger UI at `/docs`.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -64,6 +94,23 @@ All five JSON endpoints are implemented, plus the dashboard is served at `/`.
 | `GET` | `/v1/queues` | List known queues with total job counts |
 | `GET` | `/v1/queues/{name}/stats` | Counts by state for a queue |
 | `GET` | `/` | Web dashboard (single-page app; unknown non-`/v1` paths fall back to it) |
+| `GET` | `/docs` | Interactive API docs (Swagger UI, renders `/openapi.yaml`) |
+| `GET` | `/openapi.yaml` | The OpenAPI 3.0 document itself |
+
+## API reference
+
+The contract lives in [`docs/openapi.yaml`](docs/openapi.yaml) and is the source
+of truth, not a description written after the fact:
+
+- the running API serves it at `/openapi.yaml`, with a Swagger UI at `/docs`;
+- `internal/httpapi/openapi_test.go` fails the build if a route is registered but
+  undocumented (or a documented path has no handler), so the spec cannot drift
+  from the code; and
+- the same tests drive every handler and validate the real response body against
+  the schema the spec declares for that status code.
+
+To change the API, edit the handler **and** `docs/openapi.yaml`; `go test ./...`
+will tell you if they disagree.
 
 ## Design choices
 

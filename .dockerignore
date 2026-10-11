@@ -1,14 +1,39 @@
+# Docker build context for the runtime image.
+#
+# The image build only needs source (Go + the committed web/dist bundle). Keep
+# the context small and deterministic: the dev-sandbox caches that live under the
+# repo root are large and must not be shipped into the image.
+#
+# IMPORTANT: web/dist is NOT ignored — web/embed.go embeds it, so the Go build
+# needs it present. Only node_modules (not needed once dist exists) is excluded.
+
+# Version control / tooling
 .git
 .gitignore
-.opencode/memory
-.go
-.xdg-data
-.xdg-cache
-.xdg-state
-tmp
+.github
+.opencode
+
+# Dev-sandbox runtime state and caches (compose mounts these into /workspace)
+.go/
+.xdg-data/
+.xdg-cache/
+.xdg-state/
+.node/
 air.log
-api
-worker
+tmp/
+
+# Node dependencies — the dashboard is built ahead of time into web/dist
+web/node_modules/
+web/**/*.tsbuildinfo
+
+# Local build outputs and test artifacts
+/api
+/worker
 *.test
 *.out
 coverage.*
+
+# Docs and compose files are not needed inside the image
+Dockerfile
+docker-compose.yml
+README.md
