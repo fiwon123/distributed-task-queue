@@ -25,6 +25,14 @@ type fakeStore struct {
 	getID  string
 	getJob queue.Job
 	getErr error
+
+	requeueID  string
+	requeueJob queue.Job
+	requeueErr error
+
+	statsQueue string
+	stats      queue.Stats
+	statsErr   error
 }
 
 func (f *fakeStore) Enqueue(_ context.Context, p queue.EnqueueParams) (queue.Job, error) {
@@ -51,6 +59,22 @@ func (f *fakeStore) Get(_ context.Context, id string) (queue.Job, error) {
 		return queue.Job{}, f.getErr
 	}
 	return f.getJob, nil
+}
+
+func (f *fakeStore) Requeue(_ context.Context, id string) (queue.Job, error) {
+	f.requeueID = id
+	if f.requeueErr != nil {
+		return queue.Job{}, f.requeueErr
+	}
+	return f.requeueJob, nil
+}
+
+func (f *fakeStore) QueueStats(_ context.Context, name string) (queue.Stats, error) {
+	f.statsQueue = name
+	if f.statsErr != nil {
+		return queue.Stats{}, f.statsErr
+	}
+	return f.stats, nil
 }
 
 func discardLogger() *slog.Logger {
@@ -242,5 +266,109 @@ func TestIsUUID(t *testing.T) {
 		if got := isUUID(tc.in); got != tc.want {
 			t.Errorf("isUUID(%q) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestHandleRequeueOK(t *testing.T) {
+	store := &fakeStore{requeueJob: queue.Job{
+		ID:       testJobID,
+		Type:     "email",
+		Queue:    queue.DefaultQueue,
+		Status:   queue.StatusPending,
+		Attempts: 0,
+	}}
+
+	w := do(t, store, http.MethodPost, "/v1/jobs/"+testJobID+"/requeue", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if store.requeueID != testJobID {
+		t.Errorf("store Requeue id = %q, want %q", store.requeueID, testJobID)
+	}
+	var got queue.Job
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Status != queue.StatusPending {
+		t.Errorf("status = %q, want %q", got.Status, queue.StatusPending)
+	}
+}
+
+func TestHandleRequeueErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		id         string
+		storeErr   error
+		wantStatus int
+		wantCalled bool
+	}{
+		{"not found", testJobID, queue.ErrNotFound, http.StatusNotFound, true},
+		{"not requeueable", testJobID, queue.ErrNotRequeueable, http.StatusConflict, true},
+		{"internal error", testJobID, errors.New("boom"), http.StatusInternalServerError, true},
+		{"malformed id", "not-a-uuid", nil, http.StatusNotFound, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeStore{requeueErr: tc.storeErr}
+			w := do(t, store, http.MethodPost, "/v1/jobs/"+tc.id+"/requeue", "")
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", w.Code, tc.wantStatus, w.Body.String())
+			}
+			if tc.storeErr != nil && !errors.Is(tc.storeErr, queue.ErrNotRequeueable) {
+				if strings.Contains(w.Body.String(), "boom") {
+					t.Errorf("internal error leaked to client: %s", w.Body.String())
+				}
+			}
+			if got := store.requeueID != ""; got != tc.wantCalled {
+				t.Errorf("store Requeue called = %v, want %v", got, tc.wantCalled)
+			}
+		})
+	}
+}
+
+func TestHandleQueueStatsOK(t *testing.T) {
+	want := queue.Stats{
+		Queue: "critical",
+		Counts: map[queue.Status]int{
+			queue.StatusPending:   2,
+			queue.StatusRunning:   1,
+			queue.StatusCompleted: 5,
+			queue.StatusFailed:    0,
+			queue.StatusDead:      3,
+		},
+		Total: 11,
+	}
+	store := &fakeStore{stats: want}
+
+	w := do(t, store, http.MethodGet, "/v1/queues/critical/stats", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if store.statsQueue != "critical" {
+		t.Errorf("store QueueStats queue = %q, want %q", store.statsQueue, "critical")
+	}
+	var got queue.Stats
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Total != 11 || got.Counts[queue.StatusDead] != 3 {
+		t.Errorf("stats = %+v, want %+v", got, want)
+	}
+}
+
+func TestHandleQueueStatsInternalError(t *testing.T) {
+	store := &fakeStore{statsErr: errors.New("boom")}
+
+	w := do(t, store, http.MethodGet, "/v1/queues/default/stats", "")
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusInternalServerError, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "boom") {
+		t.Errorf("internal error leaked to client: %s", w.Body.String())
 	}
 }

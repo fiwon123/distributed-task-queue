@@ -268,3 +268,91 @@ func TestRunProcessesThenStopsOnCancel(t *testing.T) {
 		t.Errorf("Complete calls = %d, want 1", len(store.completeCalls))
 	}
 }
+
+// TestRunDrainsInFlightJob verifies that cancelling Run stops new claims but
+// lets an already-running job finish before Run returns.
+func TestRunDrainsInFlightJob(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+
+	store := &fakeStore{claimQueue: []queue.Job{claimedJob("job-drain", "slow", 1)}}
+	w := New(store, map[string]Handler{
+		"slow": func(context.Context, queue.Job) error {
+			close(started)
+			<-release
+			return nil
+		},
+	}, Config{Concurrency: 1, PollInterval: time.Millisecond, ShutdownTimeout: 5 * time.Second}, discardLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	<-started // the handler is now running with a claimed job
+	cancel()  // begin shutdown while the job is in flight
+
+	// Run must not return while the job is still running: it should be draining.
+	select {
+	case err := <-runDone:
+		t.Fatalf("Run returned during drain (err=%v); in-flight job was abandoned", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release) // let the handler finish
+
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return after the in-flight job finished")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.completeCalls) != 1 {
+		t.Errorf("Complete calls = %d, want 1 (drained job should be completed)", len(store.completeCalls))
+	}
+}
+
+// TestRunShutdownTimeoutAbandonsHangingJob verifies that a job which outruns the
+// drain window does not block shutdown forever.
+func TestRunShutdownTimeoutAbandonsHangingJob(t *testing.T) {
+	started := make(chan struct{})
+
+	store := &fakeStore{claimQueue: []queue.Job{claimedJob("job-hang", "hang", 1)}}
+	w := New(store, map[string]Handler{
+		"hang": func(ctx context.Context, _ queue.Job) error {
+			close(started)
+			<-ctx.Done() // only returns once the drain window closes
+			return ctx.Err()
+		},
+	}, Config{Concurrency: 1, PollInterval: time.Millisecond, ShutdownTimeout: 50 * time.Millisecond}, discardLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runDone := make(chan error, 1)
+	go func() { runDone <- w.Run(ctx) }()
+
+	<-started
+	cancel()
+
+	// ShutdownTimeout is 50ms; allow generous slack but require it to return.
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return; a hanging job blocked shutdown past ShutdownTimeout")
+	}
+}
+
+func TestConfigShutdownTimeoutDefault(t *testing.T) {
+	got := Config{}.withDefaults()
+	if got.ShutdownTimeout <= 0 {
+		t.Errorf("ShutdownTimeout = %v, want a positive default", got.ShutdownTimeout)
+	}
+}
