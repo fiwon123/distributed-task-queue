@@ -48,6 +48,10 @@ type Config struct {
 	BackoffBase time.Duration
 	// BackoffMax caps the exponential backoff delay.
 	BackoffMax time.Duration
+	// ShutdownTimeout bounds how long in-flight jobs may keep running after Run
+	// is cancelled. After it elapses the in-flight context is cancelled and any
+	// unfinished job is left to its lease.
+	ShutdownTimeout time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -71,6 +75,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.BackoffMax < c.BackoffBase {
 		c.BackoffMax = c.BackoffBase
+	}
+	if c.ShutdownTimeout <= 0 {
+		c.ShutdownTimeout = 30 * time.Second
 	}
 	return c
 }
@@ -104,56 +111,75 @@ func New(store Store, handlers map[string]Handler, cfg Config, logger *slog.Logg
 }
 
 // Run starts the polling goroutines and blocks until ctx is cancelled, then
-// waits for the in-flight jobs to finish before returning.
+// stops claiming and lets in-flight jobs finish. In-flight work gets up to
+// ShutdownTimeout; after that its context is cancelled and any unfinished job is
+// abandoned to its lease (and reclaimed later).
 func (w *Worker) Run(ctx context.Context) error {
+	// workCtx governs in-flight jobs. It is independent of ctx so a job keeps
+	// running during the drain window, and is cancelled when that window closes.
+	workCtx, cancelWork := context.WithCancel(context.Background())
+	defer cancelWork()
+
+	go func() {
+		<-ctx.Done()
+		w.log.Info("shutdown requested; draining in-flight jobs", "timeout", w.cfg.ShutdownTimeout)
+		timer := time.NewTimer(w.cfg.ShutdownTimeout)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			w.log.Warn("shutdown timeout reached; cancelling in-flight jobs")
+		case <-workCtx.Done():
+		}
+		cancelWork()
+	}()
+
 	var wg sync.WaitGroup
 	for i := 0; i < w.cfg.Concurrency; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			w.loop(ctx, id)
+			w.loop(ctx, workCtx, id)
 		}(i)
 	}
 	wg.Wait()
 	return nil
 }
 
-func (w *Worker) loop(ctx context.Context, id int) {
+// loop polls for jobs using runCtx (so claiming stops on shutdown) and processes
+// each claimed job using workCtx (so in-flight work can drain).
+func (w *Worker) loop(runCtx, workCtx context.Context, id int) {
 	w.log.Debug("worker started", "worker", id)
 	defer w.log.Debug("worker stopped", "worker", id)
 
 	for {
-		if ctx.Err() != nil {
+		if runCtx.Err() != nil {
 			return
 		}
 
-		jobs, err := w.store.Claim(ctx, queue.ClaimParams{
+		jobs, err := w.store.Claim(runCtx, queue.ClaimParams{
 			Queues: w.cfg.Queues,
 			Lease:  w.cfg.Lease,
 			Limit:  1,
 		})
 		if err != nil {
-			if ctx.Err() != nil {
+			if runCtx.Err() != nil {
 				return
 			}
 			w.log.Error("claim failed", "worker", id, "error", err)
-			if !sleepCtx(ctx, w.cfg.PollInterval) {
+			if !sleepCtx(runCtx, w.cfg.PollInterval) {
 				return
 			}
 			continue
 		}
 		if len(jobs) == 0 {
-			if !sleepCtx(ctx, w.cfg.PollInterval) {
+			if !sleepCtx(runCtx, w.cfg.PollInterval) {
 				return
 			}
 			continue
 		}
 
 		for _, job := range jobs {
-			w.process(ctx, id, job)
-			if ctx.Err() != nil {
-				return
-			}
+			w.process(workCtx, id, job)
 		}
 	}
 }

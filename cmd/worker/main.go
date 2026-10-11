@@ -37,6 +37,7 @@ func run() error {
 	lease := flag.Duration("lease", 30*time.Second, "how long a claimed job is hidden")
 	backoffBase := flag.Duration("backoff-base", time.Second, "delay before the first retry")
 	backoffMax := flag.Duration("backoff-max", time.Minute, "cap on the retry backoff")
+	shutdownTimeout := flag.Duration("shutdown-timeout", 30*time.Second, "how long in-flight jobs may finish during shutdown")
 	databaseURL := flag.String("database-url", os.Getenv("DATABASE_URL"),
 		"PostgreSQL connection string (defaults to $DATABASE_URL)")
 	applyMigrations := flag.Bool("migrate", true, "apply database migrations on startup")
@@ -69,12 +70,13 @@ func run() error {
 	}
 
 	w := worker.New(queue.New(pool), handlers(logger), worker.Config{
-		Queues:       splitQueues(*queues),
-		Concurrency:  *concurrency,
-		PollInterval: *pollInterval,
-		Lease:        *lease,
-		BackoffBase:  *backoffBase,
-		BackoffMax:   *backoffMax,
+		Queues:          splitQueues(*queues),
+		Concurrency:     *concurrency,
+		PollInterval:    *pollInterval,
+		Lease:           *lease,
+		BackoffBase:     *backoffBase,
+		BackoffMax:      *backoffMax,
+		ShutdownTimeout: *shutdownTimeout,
 	}, logger)
 
 	logger.Info("worker pool started",
