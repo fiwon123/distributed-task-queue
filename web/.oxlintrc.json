@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    // JSX uses the automatic runtime, so React need not be in scope.
+    "react/react-in-jsx-scope": "off",
+    // The dashboard fetches on mount/filter change; setting loading state from
+    // an effect is the intended pattern here, not a cascading-render bug.
+    "react/set-state-in-effect": "off"
+  },
+  "env": {
+    "builtin": true,
+    "browser": true
+  },
+  "ignorePatterns": ["dist", "node_modules"]
+}

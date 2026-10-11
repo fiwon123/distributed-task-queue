@@ -1,0 +1,22 @@
+# Who reviews changes to what.
+#
+# Requires "Allow this repository to assign pull requests to reviewers" in
+# Settings -> General -> Pull Requests. Without it, GitHub silently ignores
+# these rules and nothing is enforced.
+#
+# Format: <path-pattern>  <reviewer> [<reviewer> ...]
+# Last matching pattern wins, so put broad rules first and specific ones last.
+
+# Default: everything requires a review.
+* @fiwon123
+
+# The job store's claim/lease logic is where correctness lives -- a subtle bug
+# here double-runs or silently drops jobs. Needs a careful look.
+/internal/queue/**  @fiwon123
+
+# CI changes need a second look -- a broken workflow fails silently until a
+# release PR runs.
+/.github/workflows/**  @fiwon123
+
+# Agents and instructions drive the whole workflow -- review these carefully.
+/.opencode/**          @fiwon123

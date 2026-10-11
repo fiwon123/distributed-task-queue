@@ -1,0 +1,33 @@
+version: 2
+
+# target-branch: "dev" is load-bearing. Without it, Dependabot opens PRs against
+# the repository's default branch (usually `main`) and bypasses the `dev`
+# integration branch entirely -- dependency bumps would land straight on the
+# release branch. See AGENTS.md -> Two-tier branch model.
+
+updates:
+  # Go module dependencies (the module root is the repo root)
+  - package-ecosystem: "gomod"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "deps"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"

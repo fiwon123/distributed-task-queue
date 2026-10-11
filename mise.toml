@@ -1,0 +1,11 @@
+# mise.toml — single source of truth for the project toolchain (host + dev image).
+# The Dockerfile pins must stay in sync with the versions here:
+#   - base image golang:1.26        <- go
+#   - gh tarball ARG GH_CLI_VERSION <- gh
+#   - node tarball ARG NODE_VERSION <- node
+[tools]
+go = "1.26"
+gh = "2.102.0"
+# The dashboard (web/) is built with Node; the built bundle is committed so the
+# Go build doesn't require it.
+node = "24.21.0"

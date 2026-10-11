@@ -1,0 +1,110 @@
+# syntax=docker/dockerfile:1.6
+
+# Dev sandbox image — distributed-task-queue.
+# Go toolchain comes from the base image; `air` is installed for fast reload.
+# GitHub CLI is pinned to the same version as mise.toml.
+
+FROM golang:1.26-bookworm
+
+# Build-time ARGs are declared here, AFTER the first FROM. An ARG declared
+# before FROM is in scope only for the FROM lines themselves — every
+# instruction after FROM sees it empty, so a download URL built from an unset
+# version 404s at build time in a way no linter catches.
+ARG GH_CLI_VERSION=v2.102.0
+ARG TARGETARCH
+# Node powers the web dashboard (web/); keep in sync with mise.toml.
+ARG NODE_VERSION=v24.21.0
+# The host uid/gid, forwarded as build args by docker-compose.yml so the image
+# can create a passwd entry + home matching the host user (kills "I have no
+# name!"). Defaults keep a standalone `docker build` working.
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    ca-certificates \
+    git \
+    zsh \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN if [ -z "$TARGETARCH" ]; then \
+      case "$(uname -m)" in \
+        x86_64|amd64) TARGETARCH=amd64 ;; \
+        aarch64|arm64) TARGETARCH=arm64 ;; \
+        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+      esac; \
+    fi \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/${GH_CLI_VERSION}/gh_${GH_CLI_VERSION#v}_linux_${TARGETARCH}.tar.gz" -o /tmp/gh.tar.gz \
+    && tar -xzf /tmp/gh.tar.gz -C /tmp \
+    && mv "/tmp/gh_${GH_CLI_VERSION#v}_linux_${TARGETARCH}/bin/gh" /usr/local/bin/gh \
+    && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_CLI_VERSION#v}_linux_${TARGETARCH}" \
+    && gh --version
+
+# Node.js for the dashboard build (`make web-build`). Installed from the
+# official tarball — the same download-and-unpack shape as gh above — so the
+# version is pinned here and matched in mise.toml.
+RUN if [ -z "$TARGETARCH" ]; then \
+      case "$(uname -m)" in \
+        x86_64|amd64) TARGETARCH=amd64 ;; \
+        aarch64|arm64) TARGETARCH=arm64 ;; \
+        *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+      esac; \
+    fi \
+    && case "$TARGETARCH" in \
+         amd64) NODE_ARCH=x64 ;; \
+         arm64) NODE_ARCH=arm64 ;; \
+         *) echo "Unsupported node arch: $TARGETARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" -o /tmp/node.tar.xz \
+    && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
+    && rm -f /tmp/node.tar.xz \
+    && node --version && npm --version
+
+# Fast reload for the Go dev loop. This runs as root ON PURPOSE — `go install`
+# writes /go/bin, which is root-owned; the runtime user only needs to EXECUTE
+# the result, and GOPATH/GOCACHE are redirected to /workspace/.go by compose.
+RUN go install github.com/air-verse/air@v1.67.4
+
+# --- runtime user (matches the host uid/gid from docker-compose.yml) ---
+# The compose service runs as `user: "${HOST_UID}:${HOST_GID}"`. Without a
+# passwd entry for that uid (or a home it can write), interactive shells greet
+# the user with "I have no name!" and rc files never load. Create devuser if the
+# uid is free; if the uid is already claimed by another account, fail the build
+# readably instead of silently producing a broken shell.
+RUN if ! getent group ${HOST_GID} >/dev/null; then groupadd --gid ${HOST_GID} devuser; fi \
+    && if ! getent passwd ${HOST_UID} >/dev/null; then \
+         useradd --uid ${HOST_UID} --gid ${HOST_GID} --create-home --shell /usr/bin/zsh devuser; \
+       fi \
+    && { getent passwd devuser >/dev/null \
+         || { echo "ERROR: uid ${HOST_UID} is already used by another account, so 'devuser' cannot be created. Rebuild for a different host uid (make dev-build)." >&2; exit 1; }; } \
+    && mkdir -p /home/devuser \
+    && chown -R ${HOST_UID}:${HOST_GID} /home/devuser \
+    && git config --system --add safe.directory /workspace
+
+# --- dev-sandbox rc (badge + terminal title, loaded for BOTH users) ---
+# `make dev-shell` opens an interactive *non-login* bash, which reads only
+# ~/.bashrc (HOME comes from the compose environment), never /etc/profile.d.
+# So the sourcing hook must live in devuser's rc files — and in root's, so
+# `docker compose exec -u root bash` debugging keeps the badge too.
+COPY scripts/dev-sandbox-rc.sh /etc/profile.d/00-dev-sandbox.sh
+RUN chsh -s /usr/bin/zsh root 2>/dev/null || true \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /root/.zshrc \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /root/.bashrc \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /root/.zprofile \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /etc/zsh/zshrc \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /home/devuser/.zshrc \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /home/devuser/.bashrc \
+    && printf '%s\n' '[ -f /etc/profile.d/00-dev-sandbox.sh ] && . /etc/profile.d/00-dev-sandbox.sh' >> /home/devuser/.zprofile \
+    && chown ${HOST_UID}:${HOST_GID} \
+        /home/devuser/.bashrc /home/devuser/.zshrc /home/devuser/.zprofile
+
+# Default to the non-root user so a service added to docker-compose.yml without
+# a `user:` directive can't silently reintroduce root-owned workspace files.
+# Compose still pins the exact UID/GID via `user:`.
+USER devuser
+
+WORKDIR /workspace
+
+CMD ["sleep", "infinity"]

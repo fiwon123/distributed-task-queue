@@ -1,0 +1,15 @@
+# Fast reload config for the dev sandbox — runs the HTTP API via air.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/api ./cmd/api"
+  bin = "./tmp/api"
+  include_ext = ["go", "toml", "html"]
+  exclude_dir = ["tmp", ".go", "migrations"]
+  delay = 1000
+  stop_on_error = true
+  log = "air.log"
+
+[misc]
+  clean_on_exit = true
