@@ -29,14 +29,61 @@ Once built, you can run the API and one or more workers and:
 - inspect dead-lettered jobs and requeue them;
 - read per-queue statistics.
 
+## Two ways to run it
+
+There are two independent Docker Compose stacks, gated behind separate Compose
+profiles. Both use the same `db` service, so run one at a time.
+
+### Production (the real app)
+
+Builds the runtime image and runs the API + worker:
+
+```bash
+make prod-up      # db + api + worker (compose profile: prod)
+make demo         # enqueue a few jobs so the dashboard has something to show
+```
+
+Then open:
+
+- **Dashboard** — <http://localhost:8080/>
+- **API docs** — <http://localhost:8080/docs>
+
+Follow the worker as it processes the demo jobs with `make prod-logs`. Set
+`API_PORT` if `8080` is taken on the host. Tear down with `make prod-down`
+(keeps data) or `make prod-reset` (also deletes the Postgres volume).
+
+### Development (edit code, fast reload)
+
+The dev sandbox runs the API through `air` (fast reload) and adds a worker, so
+enqueued jobs actually get processed while you edit:
+
+```bash
+make dev-up       # db + dev sandbox + worker (compose profile: dev)
+API_URL=http://localhost:8081 make demo   # sandbox API listens on HOST_PORT (:8081)
+```
+
+The sandbox API is on <http://localhost:8081/> (override with `HOST_PORT`). For a
+shell inside the sandbox use `make shell`; to run opencode use `make opencode`.
+The API hot-reloads on Go changes; the worker is a built image, so it picks up
+worker changes on the next `make dev-up`.
+
+`make demo` needs `curl` on the host and is safe to run repeatedly. Because each
+stack is behind its own profile, `make prod-up` never starts the dev sandbox (and
+vice versa).
+
 ## Status
 
-**Phase 4 landed — the dashboard is done.** The full MVP is now implemented and
-tested: the `jobs` table, `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool
-that claims jobs with `FOR UPDATE SKIP LOCKED`, exponential-backoff retries,
-lease-based recovery of jobs abandoned by a dead worker, dead-letter requeue,
-per-queue stats, graceful shutdown, and a small web dashboard (bundled into the
-API binary) for browsing queues and jobs.
+**MVP complete.** The full feature set is implemented and tested: the `jobs`
+table, `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool that claims jobs with
+`FOR UPDATE SKIP LOCKED`, exponential-backoff retries, lease-based recovery of
+jobs abandoned by a dead worker, dead-letter requeue, per-queue stats, graceful
+shutdown, and a small web console (bundled into the API binary) for browsing
+queues and jobs, enqueueing new jobs, and watching a job's status live.
+
+The whole stack also runs with one command — `make prod-up` starts Postgres, the
+API, and a worker via Docker Compose — and the API serves its own OpenAPI
+document at `/openapi.yaml` with an interactive UI at `/docs`. See
+[Two ways to run it](#two-ways-to-run-it) and [API reference](#api-reference).
 
 ## Stack
 
@@ -44,7 +91,7 @@ API binary) for browsing queues and jobs.
 - **Storage**: PostgreSQL — the queue is a table, not an in-memory list
 - **DB access**: pgx (v5); `FOR UPDATE SKIP LOCKED` for atomic claims
 - **HTTP API**: `net/http`
-- **Dashboard**: a small React + Vite single-page app under `web/`, embedded
+- **Dashboard**: a small React + Vite single-page app under `frontend/`, embedded
   into the API binary with `go:embed` (no Node needed at runtime)
 - **Workers**: in-process goroutine pool polling the jobs table
 - **Local environment**: Docker Compose dev sandbox + a Postgres service
@@ -53,7 +100,12 @@ API binary) for browsing queues and jobs.
 
 ## API
 
-All five JSON endpoints are implemented, plus the dashboard is served at `/`.
+All five JSON endpoints are implemented. The console is served at `/` with
+client-side routes `/jobs/{id}` (live job detail) and `/workbench` (a request
+runner built from the spec), and the API serves its own documentation: the
+OpenAPI 3 document at `/openapi.yaml` and `/openapi.json`, and an offline
+Swagger UI at `/docs` (assets vendored under `docs/swagger/`, so the page needs
+no internet access).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -63,7 +115,30 @@ All five JSON endpoints are implemented, plus the dashboard is served at `/`.
 | `POST` | `/v1/jobs/{id}/requeue` | Requeue a dead-lettered or failed job |
 | `GET` | `/v1/queues` | List known queues with total job counts |
 | `GET` | `/v1/queues/{name}/stats` | Counts by state for a queue |
-| `GET` | `/` | Web dashboard (single-page app; unknown non-`/v1` paths fall back to it) |
+| `GET` | `/` | Web console (SPA: jobs, `/jobs/{id}`, `/workbench`; unknown non-`/v1` paths fall back to it) |
+| `GET` | `/docs` | Interactive API docs (offline Swagger UI, renders `/openapi.json`) |
+| `GET` | `/openapi.yaml` | The OpenAPI 3.0 document as YAML |
+| `GET` | `/openapi.json` | The OpenAPI 3.0 document as JSON (generated from the YAML) |
+| `GET` | `/swagger/*` | Vendored Swagger UI assets used by `/docs` |
+
+## API reference
+
+The contract lives in [`docs/openapi.yaml`](docs/openapi.yaml) and is the source
+of truth, not a description written after the fact:
+
+- the running API serves it at `/openapi.yaml` (and as generated JSON at
+  `/openapi.json`), with an offline Swagger UI at `/docs` whose assets are
+  vendored under `docs/swagger/`;
+- `backend/internal/httpapi/openapi_test.go` fails the build if a route is registered but
+  undocumented (or a documented path has no handler), so the spec cannot drift
+  from the code; and
+- the same tests drive every handler and validate the real response body against
+  the schema the spec declares for that status code.
+
+To change the API, edit the handler **and** `docs/openapi.yaml`; `go test ./...`
+will tell you if they disagree. `docs/openapi.json` is generated from the YAML —
+regenerate it with `make openapi-json` and commit the result (a test fails if it
+drifts).
 
 ## Design choices
 
@@ -88,7 +163,7 @@ All five JSON endpoints are implemented, plus the dashboard is served at `/`.
 - [x] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
 - [x] 6. Dead-letter: dead state + requeue endpoint
 - [x] 7. Graceful shutdown: stop claiming and drain
-- [x] 8. Dashboard: list endpoints + an embedded web UI
+- [x] 8. Console: browse/enqueue jobs, per-job detail with live status (embedded web UI)
 
 ## Done when
 
@@ -105,13 +180,13 @@ fast reload) with your host GitHub config mounted read-only and
 `db` service provides PostgreSQL; the sandbox reaches it at hostname `db`.
 
 ```bash
-make dev-up        # build + start the sandbox and Postgres (needs docker on the host)
+make dev-up        # build + start the dev stack (db + sandbox + worker; needs docker on the host)
 make dev-restart   # restart after Dockerfile/deps changes
 make shell         # shell inside the sandbox
 make opencode      # run opencode inside the sandbox
-make dev-log       # follow container logs
-make dev-down      # stop and remove the sandbox
-make reset         # stop and remove the sandbox, including the Postgres volume
+make dev-log       # follow sandbox + worker logs
+make dev-down      # stop and remove the dev stack (db + sandbox + worker)
+make reset         # stop both stacks and remove the Postgres volume
 ```
 
 Direct toolchain (host or inside the sandbox):
@@ -121,8 +196,8 @@ go build ./...       # build
 go test ./...        # test
 go vet ./...         # static analysis
 gofmt -l .           # formatting (empty output = clean)
-go run ./cmd/api     # run the HTTP API
-go run ./cmd/worker  # run a worker
+go run ./backend/cmd/api     # run the HTTP API
+go run ./backend/cmd/worker  # run a worker
 make check           # gofmt + vet + test + build (the local gate)
 ```
 
@@ -131,22 +206,22 @@ The project follows an issue-first, branch-based workflow — see
 
 ### Building the dashboard
 
-The dashboard lives in `web/` (React + Vite, tested with Vitest, linted with
+The dashboard lives in `frontend/` (React + Vite, tested with Vitest, linted with
 oxlint and formatted with oxfmt). Its production bundle is **committed** under
-`web/dist/` and embedded into the API binary with `go:embed`, so building and
+`frontend/dist/` and embedded into the API binary with `go:embed`, so building and
 running the Go binaries needs no Node toolchain. Rebuild and commit the bundle
-after changing anything under `web/src`:
+after changing anything under `frontend/src`:
 
 ```bash
-make web-install   # npm ci (once, or after dependency changes)
-make web-build     # build web/dist (commit the result)
-make web-test      # vitest
-make web-lint      # oxlint + oxfmt --check
+make frontend-install   # npm ci (once, or after dependency changes)
+make frontend-build     # build frontend/dist (commit the result)
+make frontend-test      # vitest
+make frontend-lint      # oxlint + oxfmt --check
 ```
 
-`make check` runs the web lint/test gates too; if Node is not installed it prints
-an explicit SKIPPED line (`skipped is not passed`) rather than pretending they
-ran. CI rebuilds the bundle and fails if `web/dist` is stale relative to
-`web/src`. With the dashboard embedded, run the API and open
+`make check` runs the frontend lint/test gates too; if Node is not installed it
+prints an explicit SKIPPED line (`skipped is not passed`) rather than pretending
+they ran. CI rebuilds the bundle and fails if `frontend/dist` is stale relative to
+`frontend/src`. With the dashboard embedded, run the API and open
 <http://localhost:8080/> — the SPA falls back for unknown non-`/v1` paths, so
 client-side routes work on reload.

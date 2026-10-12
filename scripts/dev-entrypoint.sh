@@ -21,8 +21,8 @@ if ! getent passwd "$(id -u)" >/dev/null; then
 fi
 
 # --- Start the API if code exists, else sleep --------------------------------
-if [ "${SLEEP_ON_IDLE}" = "true" ] && { [ ! -f "${DEV_DIR}/go.mod" ] || [ ! -d "${DEV_DIR}/cmd/api" ]; }; then
-    echo "[dev] No runnable code yet (go.mod or cmd/api missing); sleeping indefinitely for shell access..."
+if [ "${SLEEP_ON_IDLE}" = "true" ] && { [ ! -f "${DEV_DIR}/go.mod" ] || [ ! -d "${DEV_DIR}/backend/cmd/api" ]; }; then
+    echo "[dev] No runnable code yet (go.mod or backend/cmd/api missing); sleeping indefinitely for shell access..."
     exec sleep infinity
 fi
 

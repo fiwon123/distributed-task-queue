@@ -23,17 +23,17 @@
 
 - **Framework**: the standard library `testing` package (`go test`)
 - **Location**: `*_test.go` files next to the code they test
-  (e.g. `internal/queue/store_test.go`)
+  (e.g. `backend/internal/queue/store_test.go`)
 - **Run**: `go test ./...` (unit); `go test -tags integration ./...` (with Postgres)
 
 #### Test Structure
 
 ```
-internal/queue/
+backend/internal/queue/
 ├── store.go
 └── store_test.go        # tests for the package it sits in
 
-internal/worker/
+backend/internal/worker/
 ├── worker.go
 └── worker_test.go
 ```
@@ -48,6 +48,16 @@ internal/worker/
 - Because delivery is at-least-once, assert that a reclaimed job is handled
   idempotently rather than assuming exactly-once
 - Use a fake store for unit tests; only integration tests touch a real database
+
+### Frontend (React + TypeScript)
+
+- **Framework**: Vitest + React Testing Library (jsdom)
+- **Location**: `*_test.tsx` / `*_test.ts` next to the component under `frontend/src/`
+- **Run**: `make frontend-test` (or `cd frontend && npm run test`)
+- **Lint/format**: `make frontend-lint` (oxlint + `oxfmt --check`)
+- Stub the network — components call the `/v1` API; install a `fetch` stub rather
+  than hitting a real server (see the existing `installFetch` helper in
+  `frontend/src/App.test.tsx`)
 
 ### Linting
 

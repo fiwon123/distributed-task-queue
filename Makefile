@@ -8,10 +8,11 @@ GO ?= go
 NODE ?= node
 NPM ?= npm
 
-.PHONY: help check fmt vet test build run run-worker clean \
-        web-install web-deps web-build web-test web-lint web-check \
+.PHONY: help check fmt vet test build run run-worker openapi-json clean \
+        frontend-install frontend-deps frontend-build frontend-test frontend-lint frontend-check \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
-        shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto
+        shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
+        prod-up prod-down prod-logs prod-ps prod-reset demo
 
 # Extra flags for the opencode invocation. `make opencode-auto` /
 # `make dev-opencode-auto` set this to --auto, which auto-approves permissions
@@ -21,14 +22,14 @@ OPENCODE_ARGS ?=
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-## check: gofmt + vet + test + build (the local gate before pushing)
+## check: gofmt + vet + test + build + frontend lint/test (the local gate before pushing)
 check:
 	@if [ ! -f go.mod ]; then \
 	  echo "==> no go.mod yet — Go toolchain checks SKIPPED (skipped is not passed)"; \
 	else \
 	  $(MAKE) fmt vet test build; \
 	fi
-	@$(MAKE) web-check
+	@$(MAKE) frontend-check
 
 # Format only the Go files git knows about (tracked + untracked, minus
 # gitignored). This keeps dependency caches that live under the repo — in the
@@ -51,44 +52,48 @@ build:
 	@echo "==> go build"
 	$(GO) build ./...
 
+## openapi-json: regenerate docs/openapi.json from docs/openapi.yaml (commit the result)
+openapi-json:
+	$(GO) run ./docs/generate
+
 run:
-	$(GO) run ./cmd/api
+	$(GO) run ./backend/cmd/api
 
 run-worker:
-	$(GO) run ./cmd/worker
+	$(GO) run ./backend/cmd/worker
 
 clean:
 	@echo "cleaning"
 	rm -f ./api ./worker
 
-# --- Web dashboard -------------------------------------------------------------
-# The built bundle in web/dist is committed so `go build ./...` and CI work with
-# only Go installed. Rebuild it with `make web-build` after changing web/src.
+# --- Frontend dashboard -------------------------------------------------------------
+# The built bundle in frontend/dist is committed so `go build ./...` and CI work with
+# only Go installed. Rebuild it with `make frontend-build` after changing frontend/src.
 
-web-deps:
-	@if [ ! -d web/node_modules ]; then \
-	  echo "==> installing web dependencies"; \
-	  cd web && $(NPM) ci; \
+frontend-deps:
+	@if [ ! -d frontend/node_modules ]; then \
+	  echo "==> installing frontend dependencies"; \
+	  cd frontend && $(NPM) ci; \
 	fi
 
-web-install: ## Install dashboard dependencies (npm ci)
-	cd web && $(NPM) ci
+frontend-install: ## Install dashboard dependencies (npm ci)
+	cd frontend && $(NPM) ci
 
-web-build: web-deps ## Build the dashboard into web/dist (embedded by go:embed)
-	cd web && $(NPM) run build
+frontend-build: frontend-deps ## Build the dashboard into frontend/dist (embedded by go:embed)
+	cd frontend && $(NPM) run build
 
-web-test: web-deps ## Run dashboard unit tests (vitest)
-	cd web && $(NPM) run test
+frontend-test: frontend-deps ## Run dashboard unit tests (vitest)
+	cd frontend && $(NPM) run test
 
-web-lint: web-deps ## Lint (oxlint) + format-check (oxfmt) the dashboard
-	cd web && $(NPM) run lint && $(NPM) run format:check
+frontend-lint: frontend-deps ## Lint (oxlint) + format-check (oxfmt) the dashboard
+	cd frontend && $(NPM) run lint && $(NPM) run format:check
 
-## web-check: lint + test the dashboard; skips loudly when Node is absent
-web-check:
+## frontend-check: lint + test the dashboard; skips loudly when Node is absent
+frontend-check:
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
-	  echo "==> web checks SKIPPED (node not found — skipped is not passed)"; \
+	  echo "==> frontend checks SKIPPED (node not found — skipped is not passed)"; \
 	else \
-	  $(MAKE) web-lint web-test; \
+	  $(MAKE) frontend-lint frontend-test; \
 	fi
 
 # --- Dev sandbox (docker compose) ----------------------------------------------
@@ -98,36 +103,70 @@ preflight: ## Check host prerequisites for the dev sandbox
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 	@scripts/resolve-gh-token.sh --check >/dev/null 2>&1 || true
 
-dev-up: preflight ## Build and start the dev sandbox + Postgres
-	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose up -d --build
+dev-up: preflight ## Build and start the development stack (db + dev sandbox + worker)
+	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d --build
+	@echo ""
+	@echo "  dev API (air):  http://localhost:$${HOST_PORT:-8081}/"
+	@echo "  seed jobs:      API_URL=http://localhost:$${HOST_PORT:-8081} make demo"
+	@echo "  logs:           make dev-log"
+	@echo ""
 
 dev-restart: preflight ## Restart the dev container after Dockerfile/deps changes
-	@docker compose restart dev
+	@docker compose --profile dev restart dev
 
-dev-down: ## Stop and remove the dev sandbox
-	@docker compose down
+dev-down: ## Stop and remove the development stack (db + dev sandbox + worker)
+	@docker compose --profile dev down
 
-dev-log: ## Follow dev container logs
-	@docker compose logs -f dev
+dev-log: ## Follow dev sandbox + worker logs
+	@docker compose --profile dev logs -f dev worker
 
 dev-build: preflight ## Rebuild the dev image without starting
-	@docker compose build
+	@docker compose --profile dev build
 
-reset: ## Stop the dev sandbox and remove the Postgres volume
-	@docker compose down -v
+reset: ## Stop both stacks and remove the Postgres volume
+	@docker compose --profile dev --profile prod down -v
 
 shell: dev-shell ## Alias for dev-shell
 opencode: dev-opencode ## Alias for dev-opencode (run opencode inside the sandbox)
 opencode-auto: dev-opencode-auto ## Alias for dev-opencode-auto (run opencode with --auto)
 
 dev-shell: preflight ## Open a shell in the dev container
-	@docker compose exec dev bash || docker compose run --rm dev bash
+	@docker compose --profile dev exec dev bash || docker compose --profile dev run --rm dev bash
 
 dev-opencode: preflight ## Run opencode inside the dev sandbox
-	@if [ -z "$$(docker compose ps -q dev 2>/dev/null)" ]; then echo "[opencode] starting dev stack..."; HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose up -d dev; fi
-	@if [ -t 0 ]; then docker compose exec -it dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose exec -it dev bash -lc "opencode $(OPENCODE_ARGS)"; else docker compose exec -T dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose exec -T dev bash -lc "opencode $(OPENCODE_ARGS)"; fi
+	@if [ -z "$$(docker compose --profile dev ps -q dev 2>/dev/null)" ]; then echo "[opencode] starting dev stack..."; HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d dev; fi
+	@if [ -t 0 ]; then docker compose --profile dev exec -it dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose --profile dev exec -it dev bash -lc "opencode $(OPENCODE_ARGS)"; else docker compose --profile dev exec -T dev zsh -lc "cd /workspace && opencode $(OPENCODE_ARGS)" || docker compose --profile dev exec -T dev bash -lc "opencode $(OPENCODE_ARGS)"; fi
 
 # Same recipe, with --auto: auto-approve permissions that are not explicitly
 # denied (every secret-file deny rule still applies).
 dev-opencode-auto: OPENCODE_ARGS = --auto
 dev-opencode-auto: dev-opencode ## Run opencode inside the dev sandbox with --auto
+
+# --- Production stack (docker compose, profile: prod) --------------------------
+# Brings up Postgres + API + worker from the `runtime` image; the API serves the
+# embedded dashboard at / and the OpenAPI docs at /docs. Gated behind the `prod`
+# profile so it never drags in the dev sandbox.
+
+prod-up: ## Build + start the production stack (db + api + worker), in the background
+	@docker compose --profile prod up -d --build
+	@echo ""
+	@echo "  dashboard:  http://localhost:$${API_PORT:-8080}/"
+	@echo "  API docs:   http://localhost:$${API_PORT:-8080}/docs"
+	@echo "  seed jobs:  make demo"
+	@echo "  logs:       make prod-logs"
+	@echo ""
+
+prod-down: ## Stop the production stack (keeps the Postgres volume)
+	@docker compose --profile prod down
+
+prod-logs: ## Follow api + worker logs
+	@docker compose --profile prod logs -f api worker
+
+prod-ps: ## Show production-stack service status
+	@docker compose --profile prod ps
+
+prod-reset: ## Stop the production stack and delete the Postgres volume
+	@docker compose --profile prod down -v
+
+demo: ## Enqueue demo jobs against the running stack (needs curl)
+	@scripts/demo.sh
