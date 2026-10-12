@@ -1,10 +1,10 @@
 # Docker build context for the runtime image.
 #
-# The image build only needs source (Go + the committed web/dist bundle). Keep
+# The image build only needs source (Go + the committed frontend/dist bundle). Keep
 # the context small and deterministic: the dev-sandbox caches that live under the
 # repo root are large and must not be shipped into the image.
 #
-# IMPORTANT: web/dist is NOT ignored — web/embed.go embeds it, so the Go build
+# IMPORTANT: frontend/dist is NOT ignored — frontend/embed.go embeds it, so the Go build
 # needs it present. Only node_modules (not needed once dist exists) is excluded.
 
 # Version control / tooling
@@ -22,9 +22,9 @@
 air.log
 tmp/
 
-# Node dependencies — the dashboard is built ahead of time into web/dist
-web/node_modules/
-web/**/*.tsbuildinfo
+# Node dependencies — the dashboard is built ahead of time into frontend/dist
+frontend/node_modules/
+frontend/**/*.tsbuildinfo
 
 # Local build outputs and test artifacts
 /api

@@ -9,10 +9,10 @@ fixes are covered before they merge.
 ## Project Context
 
 Read `AGENTS.md` for the stack and the test commands, and
-`.opencode/instructions/testing.md` for full testing requirements. Read `cmd/`
-and `internal/` before assuming a layout — use the package structure that is
-actually there rather than the one this prompt imagines. Tests live in
-`*_test.go` files next to the code they cover.
+`.opencode/instructions/testing.md` for full testing requirements. Read
+`backend/cmd/` and `backend/internal/` before assuming a layout — use the package
+structure that is actually there rather than the one this prompt imagines. Tests
+live in `*_test.go` files next to the code they cover.
 
 ## Plan first
 

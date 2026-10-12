@@ -18,9 +18,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
-	"github.com/fiwon123/distributed-task-queue/internal/worker"
-	"github.com/fiwon123/distributed-task-queue/migrations"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/worker"
+	"github.com/fiwon123/distributed-task-queue/backend/migrations"
 )
 
 func main() {

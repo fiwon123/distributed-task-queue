@@ -8,7 +8,7 @@
 #             default `docker compose build` still produces the sandbox image
 #             that docker-compose.yml's `dev` service expects.
 #
-# The web dashboard is embedded with go:embed, and web/dist is committed, so the
+# The frontend dashboard is embedded with go:embed, and frontend/dist is committed, so the
 # build stage needs no Node toolchain.
 
 # --- build: compile static binaries -------------------------------------------
@@ -23,8 +23,8 @@ RUN go mod download
 COPY . .
 
 # CGO is disabled so the binaries run on a minimal (musl) base image.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./backend/cmd/api \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/worker ./backend/cmd/worker
 
 # --- runtime: API + worker binaries only --------------------------------------
 FROM alpine:3.20 AS runtime
@@ -53,7 +53,7 @@ FROM golang:1.26-bookworm AS dev
 # version 404s at build time in a way no linter catches.
 ARG GH_CLI_VERSION=v2.102.0
 ARG TARGETARCH
-# Node powers the web dashboard (web/); keep in sync with mise.toml.
+# Node powers the frontend dashboard (frontend/); keep in sync with mise.toml.
 ARG NODE_VERSION=v24.21.0
 # The host uid/gid, forwarded as build args by docker-compose.yml so the image
 # can create a passwd entry + home matching the host user (kills "I have no
@@ -83,7 +83,7 @@ RUN if [ -z "$TARGETARCH" ]; then \
     && rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_CLI_VERSION#v}_linux_${TARGETARCH}" \
     && gh --version
 
-# Node.js for the dashboard build (`make web-build`). Installed from the
+# Node.js for the dashboard build (`make frontend-build`). Installed from the
 # official tarball — the same download-and-unpack shape as gh above — so the
 # version is pinned here and matched in mise.toml.
 RUN if [ -z "$TARGETARCH" ]; then \

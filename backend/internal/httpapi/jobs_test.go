@@ -12,7 +12,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
 
 const testJobID = "11111111-1111-1111-1111-111111111111"

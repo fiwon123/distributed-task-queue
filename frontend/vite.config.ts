@@ -2,7 +2,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// The build output is committed (web/dist) so `go build ./...` can embed it
+// The build output is committed (frontend/dist) so `go build ./...` can embed it
 // without a Node toolchain present. Stable asset filenames keep that committed
 // bundle from churning a new hash on every rebuild.
 export default defineConfig({

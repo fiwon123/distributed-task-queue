@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
 
 var testFence = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)

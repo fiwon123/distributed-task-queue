@@ -40,7 +40,7 @@ go.work.sum
 /.xdg-state/
 air.log
 
-# Built binaries (from `go build ./cmd/...`)
+# Built binaries (from `go build ./backend/cmd/...`)
 /api
 /worker
 
@@ -50,7 +50,7 @@ air.log
 # Local Node toolchain (agents/hosts without a system Node can drop one here)
 /.node/
 
-# Node deps and build byproducts (the built embed bundle in web/dist IS committed)
+# Node deps and build byproducts (the built embed bundle in frontend/dist IS committed)
 node_modules/
 *.tsbuildinfo
 

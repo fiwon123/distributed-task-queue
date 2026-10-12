@@ -202,8 +202,8 @@
       "mode": "subagent",
       "permission": {
         "edit": {
-          "internal/**": "allow",
-          "cmd/**": "allow"
+          "backend/internal/**": "allow",
+          "backend/cmd/**": "allow"
         },
         "bash": {
           "*": "ask",
@@ -256,6 +256,50 @@
           "go vet*": "allow",
           "go build*": "allow",
           "gofmt*": "allow",
+          "make*": "allow",
+          "printenv*": "deny",
+          "env": "deny",
+          "env *": "deny",
+          "docker compose config*": "deny",
+          "docker-compose config*": "deny",
+          "docker * config*": "deny",
+          "docker * env": "deny",
+          "docker * env *": "deny",
+          "docker inspect*": "deny",
+          "*.env": "deny",
+          "*.envrc": "deny",
+          "* .env": "deny",
+          "* .envrc": "deny",
+          "*/.env": "deny",
+          "*/.envrc": "deny",
+          "* .env*": "deny",
+          "*/.env*": "deny",
+          "* .envrc*": "deny",
+          "*/.envrc*": "deny",
+          "*.env.*": "deny",
+          "* .env.*": "deny",
+          "*/.env.*": "deny"
+        }
+      }
+    },
+    "frontend": {
+      "description": "Builds the React + TypeScript dashboard under frontend/ (Vite, vitest, oxlint, oxfmt)",
+      "mode": "subagent",
+      "permission": {
+        "edit": {
+          "frontend/**": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow",
+          "*.envrc": "deny"
+        },
+        "bash": {
+          "*": "ask",
+          "npm*": "allow",
+          "npx*": "allow",
+          "node*": "allow",
+          "oxlint*": "allow",
+          "oxfmt*": "allow",
           "make*": "allow",
           "printenv*": "deny",
           "env": "deny",

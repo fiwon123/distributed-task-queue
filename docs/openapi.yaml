@@ -39,7 +39,7 @@ paths:
       summary: Enqueue a job
       description: |
         Creates a job. `type` is required and selects the worker handler
-        (`echo`, `fail`, and `sleep` are registered by `cmd/worker`). Unknown
+        (`echo`, `fail`, and `sleep` are registered by `backend/cmd/worker`). Unknown
         top-level JSON fields are rejected.
       requestBody:
         required: true
