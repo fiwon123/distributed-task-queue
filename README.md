@@ -100,10 +100,12 @@ document at `/openapi.yaml` with an interactive UI at `/docs`. See
 
 ## API
 
-All five JSON endpoints are implemented. The dashboard is served at `/`, and the
-API serves its own documentation: the OpenAPI 3 document at `/openapi.yaml` and
-`/openapi.json`, and an offline Swagger UI at `/docs` (assets vendored under
-`docs/swagger/`, so the page needs no internet access).
+All five JSON endpoints are implemented. The console is served at `/` with
+client-side routes `/jobs/{id}` (live job detail) and `/workbench` (a request
+runner built from the spec), and the API serves its own documentation: the
+OpenAPI 3 document at `/openapi.yaml` and `/openapi.json`, and an offline
+Swagger UI at `/docs` (assets vendored under `docs/swagger/`, so the page needs
+no internet access).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -113,7 +115,7 @@ API serves its own documentation: the OpenAPI 3 document at `/openapi.yaml` and
 | `POST` | `/v1/jobs/{id}/requeue` | Requeue a dead-lettered or failed job |
 | `GET` | `/v1/queues` | List known queues with total job counts |
 | `GET` | `/v1/queues/{name}/stats` | Counts by state for a queue |
-| `GET` | `/` | Web console (single-page app: browse & enqueue jobs, per-job detail with live status; unknown non-`/v1` paths fall back to it) |
+| `GET` | `/` | Web console (SPA: jobs, `/jobs/{id}`, `/workbench`; unknown non-`/v1` paths fall back to it) |
 | `GET` | `/docs` | Interactive API docs (offline Swagger UI, renders `/openapi.json`) |
 | `GET` | `/openapi.yaml` | The OpenAPI 3.0 document as YAML |
 | `GET` | `/openapi.json` | The OpenAPI 3.0 document as JSON (generated from the YAML) |

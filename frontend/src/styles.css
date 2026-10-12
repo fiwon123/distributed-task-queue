@@ -251,3 +251,109 @@ pre.payload {
   overflow: auto;
   margin: 0 0 1rem;
 }
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 720px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+}
+
+.operation-list ul {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.operation-list li {
+  margin: 0.25rem 0;
+}
+
+.operation {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.operation[aria-pressed="true"] {
+  border-color: #8fb7ff;
+}
+
+.method {
+  min-width: 3.5rem;
+  color: #9aa4b2;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.method-GET {
+  color: #8fb7ff;
+}
+.method-POST {
+  color: #7fe0a4;
+}
+.method-PUT,
+.method-PATCH {
+  color: #ffd479;
+}
+.method-DELETE {
+  color: #ff7a90;
+}
+
+fieldset.parameters {
+  border: 1px solid #2b303a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+fieldset.parameters legend {
+  color: #9aa4b2;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+fieldset.parameters label,
+.body-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #9aa4b2;
+  font-size: 0.75rem;
+}
+
+fieldset.parameters label {
+  margin-bottom: 0.5rem;
+}
+
+.body-field textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+
+.request > button {
+  margin-top: 0.75rem;
+}
+
+.response pre {
+  background: #171a21;
+  border: 1px solid #2b303a;
+  border-radius: 6px;
+  padding: 0.75rem;
+  overflow: auto;
+}
