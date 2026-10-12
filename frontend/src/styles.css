@@ -49,6 +49,8 @@ h2 {
 }
 
 select,
+input,
+textarea,
 button {
   font: inherit;
   padding: 0.35rem 0.5rem;
@@ -169,4 +171,83 @@ th {
 }
 .status-dead {
   color: #ff7a90;
+}
+
+a {
+  color: #8fb7ff;
+}
+
+header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.enqueue {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #2b303a;
+  border-radius: 8px;
+  background: #14171d;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.form-row label,
+.payload-field {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  color: #9aa4b2;
+  gap: 0.25rem;
+}
+
+.payload-field {
+  margin-top: 0.75rem;
+}
+
+.payload-field textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  resize: vertical;
+}
+
+.enqueue button[type="submit"] {
+  margin-top: 0.75rem;
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 1rem 0;
+}
+
+.detail dt {
+  color: #9aa4b2;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  align-self: center;
+}
+
+.detail dd {
+  margin: 0;
+}
+
+h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.35rem;
+}
+
+pre.payload {
+  background: #171a21;
+  border: 1px solid #2b303a;
+  border-radius: 6px;
+  padding: 0.75rem;
+  overflow: auto;
+  margin: 0 0 1rem;
 }
