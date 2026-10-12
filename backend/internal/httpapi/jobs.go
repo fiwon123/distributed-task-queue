@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
 
 // maxBodyBytes bounds a request body so a malformed client cannot exhaust

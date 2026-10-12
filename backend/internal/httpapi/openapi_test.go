@@ -12,8 +12,8 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 	"github.com/fiwon123/distributed-task-queue/docs"
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
 )
 
 // loadSpec parses and validates the embedded OpenAPI document. A failure here

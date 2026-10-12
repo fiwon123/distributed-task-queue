@@ -3,10 +3,10 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/api ./cmd/api"
+  cmd = "go build -o ./tmp/api ./backend/cmd/api"
   bin = "./tmp/api"
   include_ext = ["go", "toml", "html"]
-  exclude_dir = ["tmp", ".go", "migrations"]
+  exclude_dir = ["tmp", ".go", "backend/migrations"]
   delay = 1000
   stop_on_error = true
   log = "air.log"

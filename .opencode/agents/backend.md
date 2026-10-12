@@ -9,15 +9,15 @@ server-side Go code of a distributed task queue.
 ## Project Context
 
 Read `AGENTS.md` for the stack, architecture, and conventions, and
-`PROJECT_CONTEXT.md` for project identity. Read `cmd/` and `internal/` before
-guessing a pattern — follow the package layout and layering that is actually
-there rather than assuming one. The intended layout is:
+`PROJECT_CONTEXT.md` for project identity. Read `backend/cmd/` and
+`backend/internal/` before guessing a pattern — follow the package layout and
+layering that is actually there rather than assuming one. The intended layout is:
 
-- `cmd/api/` — the HTTP API entry point (flag parsing, wiring, startup)
-- `cmd/worker/` — the worker entry point (poll loop, pool, graceful shutdown)
-- `internal/httpapi/` — HTTP handlers for `/v1/jobs` and `/v1/queues/{name}/stats`
-- `internal/queue/` — the job store: schema, claim (`FOR UPDATE SKIP LOCKED`), status
-- `internal/worker/` — the claim loop and handler dispatch
+- `backend/cmd/api/` — the HTTP API entry point (flag parsing, wiring, startup)
+- `backend/cmd/worker/` — the worker entry point (poll loop, pool, graceful shutdown)
+- `backend/internal/httpapi/` — HTTP handlers for `/v1/jobs` and `/v1/queues/{name}/stats`
+- `backend/internal/queue/` — the job store: schema, claim (`FOR UPDATE SKIP LOCKED`), status
+- `backend/internal/worker/` — the claim loop and handler dispatch
 
 ## Responsibilities
 
@@ -35,18 +35,18 @@ there rather than assuming one. The intended layout is:
 - Delivery is at-least-once: handlers must be idempotent, and a job may be
   reclaimed and run again after a lease expires
 - Bound retries by `max_attempts`; schedule the next attempt with backoff via `run_at`
-- Schema changes go in a migration under `migrations/`
+- Schema changes go in a migration under `backend/migrations/`
 - Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
 - Do NOT create issues, branches, or PRs — the primary agent owns the GitHub
   lifecycle
 
 ## Scope and permissions
 
-Your `edit` permission is scoped to `cmd/**` and `internal/**`, and bash is
-limited to the Go toolchain (`go build*`, `go test*`, `go vet*`, `gofmt*`,
-`go run*`, `make*`). Everything else asks. If a task needs a file outside that
-scope, return the finding and let the primary agent handle it; do not try to work
-around the boundary.
+Your `edit` permission is scoped to `backend/cmd/**` and `backend/internal/**`,
+and bash is limited to the Go toolchain (`go build*`, `go test*`, `go vet*`,
+`gofmt*`, `go run*`, `make*`). Everything else asks. If a task needs a file
+outside that scope, return the finding and let the primary agent handle it; do
+not try to work around the boundary.
 
 Unit tests must not require Postgres — gate database-backed tests behind the
 `integration` build tag. Leave the `.env` deny rules in `opencode.json` intact;

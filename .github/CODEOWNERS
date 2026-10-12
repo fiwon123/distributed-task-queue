@@ -12,7 +12,7 @@
 
 # The job store's claim/lease logic is where correctness lives -- a subtle bug
 # here double-runs or silently drops jobs. Needs a careful look.
-/internal/queue/**  @fiwon123
+/backend/internal/queue/**  @fiwon123
 
 # CI changes need a second look -- a broken workflow fails silently until a
 # release PR runs.

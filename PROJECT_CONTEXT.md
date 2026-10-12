@@ -129,7 +129,7 @@ The `jobs` table:
 
 ## Topology
 
-- **Components**: `.` (single component, flat Go module)
+- **Components**: `backend/` (Go server) + `frontend/` (React dashboard) in one root Go module
 - **Services (dev)**: `dev` (sandbox) + `db` (PostgreSQL)
 
 ## Key Commands
@@ -139,13 +139,14 @@ go mod tidy
 go build ./...
 go vet ./...
 go test ./...
-go run ./cmd/api       # run the HTTP API
-go run ./cmd/worker    # run a worker
-make check             # local gate (Go steps skip until go.mod exists)
-make dev-up            # start the dev sandbox + Postgres (docker compose)
-make dev-shell         # shell inside the sandbox (alias: make shell)
-make dev-opencode      # run opencode inside the sandbox (alias: make opencode)
-make dev-down          # stop the sandbox
+go run ./backend/cmd/api       # run the HTTP API
+go run ./backend/cmd/worker    # run a worker
+make check                     # local gate (Go + frontend)
+make frontend-build            # build frontend/dist (commit the result)
+make dev-up                    # start the dev sandbox + Postgres (docker compose)
+make dev-shell                 # shell inside the sandbox (alias: make shell)
+make dev-opencode              # run opencode inside the sandbox (alias: make opencode)
+make dev-down                  # stop the sandbox
 ```
 
 ## Notes

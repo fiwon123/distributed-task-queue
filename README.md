@@ -91,7 +91,7 @@ document at `/openapi.yaml` with an interactive UI at `/docs`. See
 - **Storage**: PostgreSQL — the queue is a table, not an in-memory list
 - **DB access**: pgx (v5); `FOR UPDATE SKIP LOCKED` for atomic claims
 - **HTTP API**: `net/http`
-- **Dashboard**: a small React + Vite single-page app under `web/`, embedded
+- **Dashboard**: a small React + Vite single-page app under `frontend/`, embedded
   into the API binary with `go:embed` (no Node needed at runtime)
 - **Workers**: in-process goroutine pool polling the jobs table
 - **Local environment**: Docker Compose dev sandbox + a Postgres service
@@ -122,7 +122,7 @@ The contract lives in [`docs/openapi.yaml`](docs/openapi.yaml) and is the source
 of truth, not a description written after the fact:
 
 - the running API serves it at `/openapi.yaml`, with a Swagger UI at `/docs`;
-- `internal/httpapi/openapi_test.go` fails the build if a route is registered but
+- `backend/internal/httpapi/openapi_test.go` fails the build if a route is registered but
   undocumented (or a documented path has no handler), so the spec cannot drift
   from the code; and
 - the same tests drive every handler and validate the real response body against
@@ -187,8 +187,8 @@ go build ./...       # build
 go test ./...        # test
 go vet ./...         # static analysis
 gofmt -l .           # formatting (empty output = clean)
-go run ./cmd/api     # run the HTTP API
-go run ./cmd/worker  # run a worker
+go run ./backend/cmd/api     # run the HTTP API
+go run ./backend/cmd/worker  # run a worker
 make check           # gofmt + vet + test + build (the local gate)
 ```
 
@@ -197,22 +197,22 @@ The project follows an issue-first, branch-based workflow — see
 
 ### Building the dashboard
 
-The dashboard lives in `web/` (React + Vite, tested with Vitest, linted with
+The dashboard lives in `frontend/` (React + Vite, tested with Vitest, linted with
 oxlint and formatted with oxfmt). Its production bundle is **committed** under
-`web/dist/` and embedded into the API binary with `go:embed`, so building and
+`frontend/dist/` and embedded into the API binary with `go:embed`, so building and
 running the Go binaries needs no Node toolchain. Rebuild and commit the bundle
-after changing anything under `web/src`:
+after changing anything under `frontend/src`:
 
 ```bash
-make web-install   # npm ci (once, or after dependency changes)
-make web-build     # build web/dist (commit the result)
-make web-test      # vitest
-make web-lint      # oxlint + oxfmt --check
+make frontend-install   # npm ci (once, or after dependency changes)
+make frontend-build     # build frontend/dist (commit the result)
+make frontend-test      # vitest
+make frontend-lint      # oxlint + oxfmt --check
 ```
 
-`make check` runs the web lint/test gates too; if Node is not installed it prints
-an explicit SKIPPED line (`skipped is not passed`) rather than pretending they
-ran. CI rebuilds the bundle and fails if `web/dist` is stale relative to
-`web/src`. With the dashboard embedded, run the API and open
+`make check` runs the frontend lint/test gates too; if Node is not installed it
+prints an explicit SKIPPED line (`skipped is not passed`) rather than pretending
+they ran. CI rebuilds the bundle and fails if `frontend/dist` is stale relative to
+`frontend/src`. With the dashboard embedded, run the API and open
 <http://localhost:8080/> — the SPA falls back for unknown non-`/v1` paths, so
 client-side routes work on reload.

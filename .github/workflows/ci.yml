@@ -3,7 +3,7 @@ name: CI
 # Go CI for this project. Adapted from the engineering-workflow library's
 # `ci.go.yml.template`, flattened to a single module at the repo root (the
 # template parameterizes a `<component-directory>`; here the module root is `.`).
-# Toolchain: the Go gates (gofmt, vet, test, build) plus the web dashboard
+# Toolchain: the Go gates (gofmt, vet, test, build) plus the frontend dashboard
 # (oxlint, oxfmt, vitest, vite build). A second job (`stack`) builds the runtime
 # Docker image and runs the full stack end to end.
 #
@@ -28,7 +28,7 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
-      - "web/**"
+      - "frontend/**"
       - "docs/**"
       - "scripts/**"
       - "Dockerfile"
@@ -64,35 +64,35 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install web dependencies
-        working-directory: web
+      - name: Install frontend dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Lint web (oxlint)
-        working-directory: web
+      - name: Lint frontend (oxlint)
+        working-directory: frontend
         run: npm run lint
 
-      - name: Check web formatting (oxfmt)
-        working-directory: web
+      - name: Check frontend formatting (oxfmt)
+        working-directory: frontend
         run: npm run format:check
 
-      - name: Test web (vitest)
-        working-directory: web
+      - name: Test frontend (vitest)
+        working-directory: frontend
         run: npm run test
 
-      - name: Build web dashboard
-        working-directory: web
+      - name: Build frontend dashboard
+        working-directory: frontend
         run: npm run build
 
-      # web/dist is committed so `go build` needs no Node. Fail if a source
+      # frontend/dist is committed so `go build` needs no Node. Fail if a source
       # change was not accompanied by a rebuilt bundle.
       - name: Dashboard bundle is up to date
         run: |
-          if ! git diff --quiet -- web/dist; then
-            echo "web/dist is stale relative to web/src. Run 'make web-build' and commit the result."
-            git diff --stat -- web/dist
+          if ! git diff --quiet -- frontend/dist; then
+            echo "frontend/dist is stale relative to frontend/src. Run 'make frontend-build' and commit the result."
+            git diff --stat -- frontend/dist
             exit 1
           fi
 

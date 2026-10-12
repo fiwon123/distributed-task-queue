@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
 
 // Handler runs a single job. Returning an error marks the attempt failed and

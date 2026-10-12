@@ -9,7 +9,7 @@ NODE ?= node
 NPM ?= npm
 
 .PHONY: help check fmt vet test build run run-worker clean \
-        web-install web-deps web-build web-test web-lint web-check \
+        frontend-install frontend-deps frontend-build frontend-test frontend-lint frontend-check \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
         shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
         prod-up prod-down prod-logs prod-ps prod-reset demo
@@ -22,14 +22,14 @@ OPENCODE_ARGS ?=
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-## check: gofmt + vet + test + build (the local gate before pushing)
+## check: gofmt + vet + test + build + frontend lint/test (the local gate before pushing)
 check:
 	@if [ ! -f go.mod ]; then \
 	  echo "==> no go.mod yet — Go toolchain checks SKIPPED (skipped is not passed)"; \
 	else \
 	  $(MAKE) fmt vet test build; \
 	fi
-	@$(MAKE) web-check
+	@$(MAKE) frontend-check
 
 # Format only the Go files git knows about (tracked + untracked, minus
 # gitignored). This keeps dependency caches that live under the repo — in the
@@ -53,43 +53,43 @@ build:
 	$(GO) build ./...
 
 run:
-	$(GO) run ./cmd/api
+	$(GO) run ./backend/cmd/api
 
 run-worker:
-	$(GO) run ./cmd/worker
+	$(GO) run ./backend/cmd/worker
 
 clean:
 	@echo "cleaning"
 	rm -f ./api ./worker
 
-# --- Web dashboard -------------------------------------------------------------
-# The built bundle in web/dist is committed so `go build ./...` and CI work with
-# only Go installed. Rebuild it with `make web-build` after changing web/src.
+# --- Frontend dashboard -------------------------------------------------------------
+# The built bundle in frontend/dist is committed so `go build ./...` and CI work with
+# only Go installed. Rebuild it with `make frontend-build` after changing frontend/src.
 
-web-deps:
-	@if [ ! -d web/node_modules ]; then \
-	  echo "==> installing web dependencies"; \
-	  cd web && $(NPM) ci; \
+frontend-deps:
+	@if [ ! -d frontend/node_modules ]; then \
+	  echo "==> installing frontend dependencies"; \
+	  cd frontend && $(NPM) ci; \
 	fi
 
-web-install: ## Install dashboard dependencies (npm ci)
-	cd web && $(NPM) ci
+frontend-install: ## Install dashboard dependencies (npm ci)
+	cd frontend && $(NPM) ci
 
-web-build: web-deps ## Build the dashboard into web/dist (embedded by go:embed)
-	cd web && $(NPM) run build
+frontend-build: frontend-deps ## Build the dashboard into frontend/dist (embedded by go:embed)
+	cd frontend && $(NPM) run build
 
-web-test: web-deps ## Run dashboard unit tests (vitest)
-	cd web && $(NPM) run test
+frontend-test: frontend-deps ## Run dashboard unit tests (vitest)
+	cd frontend && $(NPM) run test
 
-web-lint: web-deps ## Lint (oxlint) + format-check (oxfmt) the dashboard
-	cd web && $(NPM) run lint && $(NPM) run format:check
+frontend-lint: frontend-deps ## Lint (oxlint) + format-check (oxfmt) the dashboard
+	cd frontend && $(NPM) run lint && $(NPM) run format:check
 
-## web-check: lint + test the dashboard; skips loudly when Node is absent
-web-check:
+## frontend-check: lint + test the dashboard; skips loudly when Node is absent
+frontend-check:
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
-	  echo "==> web checks SKIPPED (node not found — skipped is not passed)"; \
+	  echo "==> frontend checks SKIPPED (node not found — skipped is not passed)"; \
 	else \
-	  $(MAKE) web-lint web-test; \
+	  $(MAKE) frontend-lint frontend-test; \
 	fi
 
 # --- Dev sandbox (docker compose) ----------------------------------------------

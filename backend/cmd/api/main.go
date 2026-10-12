@@ -20,11 +20,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/fiwon123/distributed-task-queue/backend/internal/httpapi"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/migrations"
 	"github.com/fiwon123/distributed-task-queue/docs"
-	"github.com/fiwon123/distributed-task-queue/internal/httpapi"
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
-	"github.com/fiwon123/distributed-task-queue/migrations"
-	"github.com/fiwon123/distributed-task-queue/web"
+	"github.com/fiwon123/distributed-task-queue/frontend"
 )
 
 func main() {
@@ -72,7 +72,7 @@ func run() error {
 	// Serve the embedded dashboard. fs.Sub only fails on an invalid path, which
 	// would be a build-time embedding bug, so a failure is fatal rather than a
 	// silent "no UI".
-	dashboard, err := fs.Sub(web.Dist, "dist")
+	dashboard, err := fs.Sub(frontend.Dist, "dist")
 	if err != nil {
 		return fmt.Errorf("locate embedded dashboard: %w", err)
 	}

@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/fiwon123/distributed-task-queue/migrations"
+	"github.com/fiwon123/distributed-task-queue/backend/migrations"
 )
 
 // testPool connects to the Postgres named by DATABASE_URL, applies migrations,

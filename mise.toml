@@ -6,6 +6,6 @@
 [tools]
 go = "1.26"
 gh = "2.102.0"
-# The dashboard (web/) is built with Node; the built bundle is committed so the
+# The dashboard (frontend/) is built with Node; the built bundle is committed so the
 # Go build doesn't require it.
 node = "24.21.0"

@@ -52,23 +52,28 @@ Worker pool (claim due jobs with FOR UPDATE SKIP LOCKED, run handlers, update st
 
 ## Project Structure
 
-**Not implemented yet.** The tree currently contains only workflow and
-configuration files. The intended layout, to be built in order (see Build Order
-in `PROJECT_CONTEXT.md`), is:
+The repository separates the Go server and the React dashboard into two
+top-level directories, with the workflow and configuration files at the root:
 
 ```
 distributed-task-queue/
-├── cmd/api/             # HTTP API entry point (flags, wiring, startup)
-├── cmd/worker/          # worker entry point (poll loop, pool, graceful shutdown)
-├── internal/httpapi/    # HTTP handlers for /v1/jobs and /v1/queues/{name}/stats
-├── internal/queue/      # the job store: schema, claim (FOR UPDATE SKIP LOCKED), status
-├── internal/worker/     # worker pool: claim, dispatch, retry/backoff, leases
-├── migrations/          # SQL migrations for the jobs table
-├── scripts/             # dev-sandbox helper scripts (entrypoint, token resolution, …)
-├── Dockerfile           # dev sandbox image (Go + gh + air fast reload)
-├── docker-compose.yml   # dev sandbox + local Postgres (`dev` + `db` services)
-├── mise.toml            # toolchain pins (go, gh) — host + dev image
-├── .air.toml            # air fast-reload config (runs ./cmd/api)
+├── backend/                 # the Go server (the whole HTTP API + queue)
+│   ├── cmd/api/             # HTTP API entry point (flags, wiring, startup)
+│   ├── cmd/worker/          # worker entry point (poll loop, pool, graceful shutdown)
+│   ├── internal/httpapi/    # HTTP handlers for /v1/jobs and /v1/queues/{name}/stats
+│   ├── internal/queue/      # the job store: schema, claim (FOR UPDATE SKIP LOCKED), status
+│   ├── internal/worker/     # worker pool: claim, dispatch, retry/backoff, leases
+│   └── migrations/          # SQL migrations for the jobs table
+├── frontend/                # React + TypeScript dashboard (Vite; embeds frontend/dist)
+│   ├── src/                 # the single-page app
+│   └── dist/                # committed build output (`go:embed`, `make frontend-build`)
+├── docs/                    # OpenAPI spec + Swagger UI, embedded and served by the API
+├── go.mod / go.sum          # single root Go module (backend + frontend + docs embeds)
+├── scripts/                 # dev-sandbox helper scripts (entrypoint, token resolution, …)
+├── Dockerfile               # dev sandbox image (Go + gh + air fast reload)
+├── docker-compose.yml       # dev sandbox + local Postgres (`dev` + `db` services)
+├── mise.toml                # toolchain pins (go, gh) — host + dev image
+├── .air.toml                # air fast-reload config (runs ./backend/cmd/api)
 ├── Makefile
 ├── opencode.json
 └── .github/workflows/ci.yml
@@ -82,8 +87,11 @@ go vet ./...                    # static analysis
 go test ./...                   # run tests
 go test -tags integration ./... # run Postgres integration tests (needs DATABASE_URL)
 gofmt -l .                      # list unformatted files (empty = clean)
-go run ./cmd/api                # run the HTTP API
-go run ./cmd/worker             # run a worker (once implemented)
+go run ./backend/cmd/api        # run the HTTP API
+go run ./backend/cmd/worker     # run a worker
+make frontend-build             # build frontend/dist (commit the result)
+make frontend-test              # vitest
+make frontend-lint              # oxlint + oxfmt --check
 ```
 
 Integration tests are gated behind `//go:build integration` and skip when
@@ -96,14 +104,11 @@ the dev Postgres from the sandbox (`DATABASE_URL` points at hostname `db`).
 make check
 ```
 
-`make check` runs `gofmt -l`, `go vet`, `go test`, and `go build` — the same gate
-CI enforces. Prefer it over listing commands separately: agents follow whatever
-`check` runs, so a check missing from it is a check nobody performs. Add new
-checks to the `Makefile`.
-
-> **Until `go.mod` exists, `make check` skips the Go toolchain steps** with an
-> explicit "SKIPPED (skipped is not passed)" message — a skipped run verifies
-> nothing, so scaffolding PRs are judged by review, not by `make`.
+`make check` runs `gofmt -l`, `go vet`, `go test`, and `go build`, plus the
+frontend gates (`oxlint`, `oxfmt --check`, `vitest`) — the same checks CI
+enforces on release PRs. Prefer it over listing commands separately: agents
+follow whatever `check` runs, so a check missing from it is a check nobody
+performs. Add new checks to the `Makefile`.
 
 ### Dev sandbox
 
@@ -267,13 +272,13 @@ Agent definitions live in `opencode.json` and `.opencode/agents/`:
 - **build** (primary): Full development work with all tools enabled
 - **plan** (primary): Analysis and planning without making changes — restricted to read-only subagents (explore, reviewer only)
 - **reviewer** (subagent): Reviews code for bugs, security, and regressions
-- **backend** (subagent): Implements the Go API, the job store, and the worker — edit scoped to `cmd/**` and `internal/**`
-- **tester** (subagent): Writes and runs Go tests — edit scoped to `*_test.go` and `testdata/`
+- **backend** (subagent): Implements the Go API, the job store, and the worker — edit scoped to `backend/cmd/**` and `backend/internal/**`
+- **frontend** (subagent): Builds the React + TypeScript dashboard — edit scoped to `frontend/**`
+- **tester** (subagent): Writes and runs tests — edit scoped to `*_test.go` and `testdata/`
 
-This project is single-stack (Go, no frontend), so the `frontend` and `visual`
-agents from the engineering-workflow templates are deliberately not defined here —
-a subagent whose edit scope points at a directory that does not exist is an
-expensive way to say nothing.
+The `visual` agent from the engineering-workflow template is deliberately not
+defined here: the dashboard is covered by the `frontend` agent plus the
+`reviewer`, so a separate visual-diff agent would be a second tool for one job.
 
 Each agent's instructions live in exactly one place: the body of
 `.opencode/agents/<name>.md`. Model, mode, and permissions live in

@@ -1,10 +1,10 @@
-// Package web embeds the built task-queue dashboard so the API binary can serve
-// it without any Node toolchain at runtime.
+// Package frontend embeds the built task-queue dashboard so the API binary can
+// serve it without any Node toolchain at runtime.
 //
 // The contents of dist/ are committed (see "Building the dashboard" in the
 // README) so that `go build ./...` and CI work on a machine with only Go.
-// Rebuild them after changing anything under web/src with `make web-build`.
-package web
+// Rebuild them after changing anything under frontend/src with `make frontend-build`.
+package frontend
 
 import "embed"
 

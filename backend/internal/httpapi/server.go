@@ -12,7 +12,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
 
 // JobStore is the subset of the job store the HTTP API needs. The production
@@ -45,7 +45,7 @@ func New(store JobStore, logger *slog.Logger) *Server {
 }
 
 // WithDashboard mounts a single-page app at "/". fsys must be rooted at the
-// built asset directory (e.g. fs.Sub(web.Dist, "dist")). Unknown non-/v1 paths
+// built asset directory (e.g. fs.Sub(frontend.Dist, "dist")). Unknown non-/v1 paths
 // fall back to index.html so client-side routes work on refresh. It returns the
 // receiver for chaining.
 func (s *Server) WithDashboard(fsys fs.FS) *Server {

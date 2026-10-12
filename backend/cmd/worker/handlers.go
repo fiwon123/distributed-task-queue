@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fiwon123/distributed-task-queue/internal/queue"
-	"github.com/fiwon123/distributed-task-queue/internal/worker"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
+	"github.com/fiwon123/distributed-task-queue/backend/internal/worker"
 )
 
 // handlers returns the demo handlers the worker dispatches on. Real deployments
