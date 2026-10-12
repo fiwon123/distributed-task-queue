@@ -63,7 +63,9 @@ Running two checkouts of this repo on one machine? Give each its own
 `PROJECT_NAME` (commented in the template) — it prefixes every Docker resource
 (containers, network, Postgres volume), so a second checkout with its own name
 gets isolated resources instead of container-name conflicts and a shared
-database. `DEV_IMAGE` does the same for the local dev image tag.
+database. `DEV_IMAGE` does the same for the local dev image tag. `PROJECT_NAME`
+isolates Docker resources only — host ports are separate, so also give each
+checkout its own `FRONTEND_PORT` / `HOST_PORT` / `API_PORT` / `POSTGRES_PORT`.
 
 ### Development (edit code, fast reload)
 
