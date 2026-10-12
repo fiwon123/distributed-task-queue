@@ -142,7 +142,11 @@ export default function Workbench() {
   }
 
   return (
-    <section aria-label="api workbench" className="workbench">
+    <section
+      aria-label="api workbench"
+      className="workbench"
+      aria-busy={operations === null && !specError}
+    >
       <div className="operation-list">
         <h2>API</h2>
         {specError && (

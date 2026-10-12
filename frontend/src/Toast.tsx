@@ -12,8 +12,8 @@ export default function Toast({
   onDismiss: () => void;
   durationMs?: number;
 }) {
-  // The countdown starts when the toast mounts; JobsView unmounts the toast
-  // (notice -> null) before showing the next one, so each notice gets its own.
+  // The countdown is per mount: JobsView keys the toast by notice id, so every
+  // new notice remounts it and the timer always restarts from durationMs.
   useEffect(() => {
     const timer = window.setTimeout(onDismiss, durationMs);
     return () => window.clearTimeout(timer);

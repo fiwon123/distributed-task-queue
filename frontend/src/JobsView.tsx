@@ -16,7 +16,9 @@ export default function JobsView() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<ReactNode>(null);
+  // Each notice carries an id so a new message remounts the toast (fresh
+  // countdown) instead of mutating the one already on screen.
+  const [notice, setNotice] = useState<{ id: number; node: ReactNode } | null>(null);
   const [busy, setBusy] = useState(false);
   const [showEnqueue, setShowEnqueue] = useState(false);
 
@@ -60,12 +62,16 @@ export default function JobsView() {
     void loadQueue();
   }, [loadQueue]);
 
+  const showNotice = useCallback((node: ReactNode) => {
+    setNotice((current) => ({ id: (current?.id ?? 0) + 1, node }));
+  }, []);
+
   async function onRequeue(job: Job) {
     setNotice(null);
     setError(null);
     try {
       await requeueJob(job.id);
-      setNotice(`Requeued ${shortID(job.id)}`);
+      showNotice(`Requeued ${shortID(job.id)}`);
       await Promise.all([loadQueue(), loadQueues()]);
     } catch (err) {
       setError(errorMessage(err));
@@ -74,7 +80,7 @@ export default function JobsView() {
 
   async function onEnqueued(job: Job) {
     setError(null);
-    setNotice(
+    showNotice(
       <>
         Enqueued{" "}
         <AppLink to={`/jobs/${job.id}`}>
@@ -138,7 +144,7 @@ export default function JobsView() {
           {error}
         </p>
       )}
-      {notice && <Toast message={notice} onDismiss={dismissNotice} />}
+      {notice && <Toast key={notice.id} message={notice.node} onDismiss={dismissNotice} />}
 
       {showEnqueue && <EnqueueForm onEnqueued={onEnqueued} onError={setError} />}
 

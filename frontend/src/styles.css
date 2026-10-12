@@ -45,7 +45,6 @@
   --dead: #fb7185;
   --dead-bg: rgba(251, 113, 133, 0.15);
 
-  --notice-bg: rgba(110, 231, 168, 0.12);
   --notice-border: #2c6b45;
   --error-bg: rgba(251, 113, 133, 0.14);
   --error-border: #7f2333;
@@ -87,7 +86,6 @@
   --dead: #be123c;
   --dead-bg: rgba(190, 18, 60, 0.11);
 
-  --notice-bg: rgba(4, 120, 87, 0.1);
   --notice-border: #7fc9ac;
   --error-bg: rgba(190, 18, 60, 0.09);
   --error-border: #e5a2b3;
