@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { requeueJob } from "./api";
+import CopyButton from "./CopyButton";
 import { errorMessage, isRequeueable, isTerminal, prettyJSON, shortID } from "./format";
 import { AppLink } from "./router";
+import Skeleton from "./Skeleton";
 import type { Job } from "./types";
 import { useJobPolling } from "./useJobPolling";
 
@@ -27,9 +29,10 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
   }
 
   const banner = error ?? actionError;
+  const payloadText = job !== null ? prettyJSON(job.payload) : "";
 
   return (
-    <section aria-label="job detail">
+    <section aria-label="job detail" aria-busy={loading}>
       <p>
         <AppLink to="/">← All jobs</AppLink>
       </p>
@@ -38,7 +41,7 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
           {banner}
         </p>
       )}
-      {loading && job === null && <p className="muted">Loading…</p>}
+      {loading && job === null && <Skeleton lines={6} />}
       {job !== null && (
         <>
           <h2>
@@ -52,7 +55,10 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
           )}
           <dl className="detail">
             <dt>ID</dt>
-            <dd className="mono">{job.id}</dd>
+            <dd className="mono with-copy">
+              <span>{job.id}</span>
+              <CopyButton value={job.id} />
+            </dd>
             <dt>Type</dt>
             <dd>{job.type}</dd>
             <dt>Queue</dt>
@@ -75,9 +81,17 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
             </dd>
           </dl>
           <h3>Payload</h3>
-          <pre className="payload mono">{prettyJSON(job.payload)}</pre>
+          <div className="payload-block">
+            <pre className="payload mono">{payloadText}</pre>
+            <CopyButton value={payloadText} label="Copy JSON" />
+          </div>
           {isRequeueable(job.status) && (
-            <button type="button" onClick={() => void onRequeue(job)} disabled={busy}>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => void onRequeue(job)}
+              disabled={busy}
+            >
               Requeue
             </button>
           )}

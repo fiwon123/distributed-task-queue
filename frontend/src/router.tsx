@@ -33,13 +33,16 @@ export function matchJobPath(path: string): string | null {
 
 // AppLink renders an anchor that routes client-side. Modifier-clicks and
 // middle-clicks fall through to the browser so "open in new tab" still works.
+// Pass current to mark the active nav item with aria-current="page".
 export function AppLink({
   to,
   className,
+  current,
   children,
 }: {
   to: string;
   className?: string;
+  current?: boolean;
   children: ReactNode;
 }) {
   function onClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -49,7 +52,12 @@ export function AppLink({
     navigate(to);
   }
   return (
-    <a href={to} className={className} onClick={onClick}>
+    <a
+      href={to}
+      className={className}
+      aria-current={current ? "page" : undefined}
+      onClick={onClick}
+    >
       {children}
     </a>
   );

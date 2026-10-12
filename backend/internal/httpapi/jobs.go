@@ -134,6 +134,32 @@ func (s *Server) handleRequeue(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, job)
 }
 
+// requeueDeadResponse is the body of POST /v1/queues/{name}/requeue-dead.
+type requeueDeadResponse struct {
+	Queue    string `json:"queue"`
+	Requeued int    `json:"requeued"`
+}
+
+// handleRequeueDead implements POST /v1/queues/{name}/requeue-dead: it returns
+// every dead-lettered job in the named queue to the pending state and reports
+// how many jobs it revived. A queue with no dead jobs reports 0, not an error.
+func (s *Server) handleRequeueDead(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if strings.TrimSpace(name) == "" {
+		writeError(w, http.StatusBadRequest, "queue name is required")
+		return
+	}
+
+	requeued, err := s.store.RequeueDead(r.Context(), name)
+	if err != nil {
+		s.log.Error("requeue dead jobs", "queue", name, "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, requeueDeadResponse{Queue: name, Requeued: requeued})
+}
+
 // handleQueueStats implements GET /v1/queues/{name}/stats.
 func (s *Server) handleQueueStats(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")

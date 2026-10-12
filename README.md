@@ -52,20 +52,49 @@ Follow the worker as it processes the demo jobs with `make prod-logs`. Set
 `API_PORT` if `8080` is taken on the host. Tear down with `make prod-down`
 (keeps data) or `make prod-reset` (also deletes the Postgres volume).
 
+Running several projects side by side? Copy the committed template to `.env`
+(`cp .env.example .env`) and adjust the host ports — it pre-fills the
+compose-interpolated variables with conflict-free values
+(`15173` / `18081` / `18080` / `15432`). `docker compose` reads `.env`
+automatically and the Makefile / `scripts/demo.sh` honor it when printing URLs
+or seeding jobs.
+
+Running two checkouts of this repo on one machine? Give each its own
+`PROJECT_NAME` (commented in the template) — it prefixes every Docker resource
+(containers, network, Postgres volume), so a second checkout with its own name
+gets isolated resources instead of container-name conflicts and a shared
+database. `DEV_IMAGE` does the same for the local dev image tag. `PROJECT_NAME`
+isolates Docker resources only — host ports are separate, so also give each
+checkout its own `FRONTEND_PORT` / `HOST_PORT` / `API_PORT` / `POSTGRES_PORT`.
+
 ### Development (edit code, fast reload)
 
-The dev sandbox runs the API through `air` (fast reload) and adds a worker, so
-enqueued jobs actually get processed while you edit:
+The dev stack runs the API through `air` (fast reload), a worker so enqueued jobs
+actually get processed, and a **Vite dev server** for the dashboard:
 
 ```bash
-make dev-up       # db + dev sandbox + worker (compose profile: dev)
+make dev-up       # db + dev sandbox + worker + Vite (compose profile: dev)
 API_URL=http://localhost:8081 make demo   # sandbox API listens on HOST_PORT (:8081)
 ```
 
-The sandbox API is on <http://localhost:8081/> (override with `HOST_PORT`). For a
-shell inside the sandbox use `make shell`; to run opencode use `make opencode`.
-The API hot-reloads on Go changes; the worker is a built image, so it picks up
-worker changes on the next `make dev-up`.
+Then open:
+
+- **Console (Vite, hot reload)** — <http://localhost:5173/> (override with `FRONTEND_PORT`)
+- **Dev API (air)** — <http://localhost:8081/> (override with `HOST_PORT`)
+- **API docs** — <http://localhost:8081/docs>
+
+Editable per project via `.env` (see the note above): `cp .env.example .env`
+then change `FRONTEND_PORT` / `HOST_PORT` to whatever your other projects are
+not using.
+
+Both sides hot-reload: editing `frontend/src` updates the browser via HMR, and
+editing a Go handler rebuilds through `air`. Vite proxies `/v1`, `/openapi`,
+`/docs`, and `/swagger` to the dev API, so the console's `/workbench` loads the
+served spec on the Vite origin. The worker is a built image, so it picks up worker
+changes on the next `make dev-up`.
+
+For a shell inside the sandbox use `make shell`; to run opencode use
+`make opencode`; follow the Vite/API/worker logs with `make dev-log`.
 
 `make demo` needs `curl` on the host and is safe to run repeatedly. Because each
 stack is behind its own profile, `make prod-up` never starts the dev sandbox (and

@@ -7,6 +7,21 @@
 #   API_URL=http://host:8080 make demo # explicit base URL
 set -uo pipefail
 
+# Honor a repo-root .env (same file docker compose reads) so `make demo`
+# targets API_PORT from it when nothing is passed explicitly. Shell env wins
+# over .env — matching docker-compose — so explicitly passed API_URL/API_PORT
+# are saved before sourcing and restored after.
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+API_URL_OVERRIDE="${API_URL:-}"
+API_PORT_OVERRIDE="${API_PORT:-}"
+if [ -f "$ROOT_DIR/.env" ]; then
+    set -a
+    . "$ROOT_DIR/.env"
+    set +a
+fi
+[ -n "$API_URL_OVERRIDE" ] && API_URL="$API_URL_OVERRIDE"
+[ -n "$API_PORT_OVERRIDE" ] && API_PORT="$API_PORT_OVERRIDE"
+
 API_URL="${API_URL:-http://localhost:${API_PORT:-8080}}"
 QUEUE="${DEMO_QUEUE:-default}"
 

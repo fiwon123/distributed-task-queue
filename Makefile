@@ -98,15 +98,33 @@ frontend-check:
 
 # --- Dev sandbox (docker compose) ----------------------------------------------
 
+# Pull the host-port overrides from a repo-root .env (the same file docker
+# compose reads for its ${VAR} substitution) so the URLs `dev-up` / `prod-up`
+# print agree with the ports the stack actually binds after
+# `cp .env.example .env`. `?=` keeps the shell environment / command line
+# authoritative — matching docker-compose's own precedence (shell env > .env) —
+# and the ${VAR:-default} fallbacks still apply when .env is absent or the
+# variable is not defined there. Values may carry trailing # comments / quotes
+# (as compose tolerates); only HOST_UID/HOST_GID/HOME are never read this way
+# (they are auto-derived or intentionally not overridable via .env).
+ENV_VAL = $(shell sed -n 's/^$1=//p' .env 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*#.*$$//; s/^"//; s/"$$//' | tail -1)
+FRONTEND_PORT ?= $(call ENV_VAL,FRONTEND_PORT)
+HOST_PORT ?= $(call ENV_VAL,HOST_PORT)
+API_PORT ?= $(call ENV_VAL,API_PORT)
+POSTGRES_PORT ?= $(call ENV_VAL,POSTGRES_PORT)
+export FRONTEND_PORT HOST_PORT API_PORT POSTGRES_PORT
+
 preflight: ## Check host prerequisites for the dev sandbox
 	@test -x "$(HOME)/.opencode/bin/opencode" || { echo "ERROR: opencode not found at ~/.opencode/bin/opencode" >&2; exit 1; }
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 	@scripts/resolve-gh-token.sh --check >/dev/null 2>&1 || true
 
-dev-up: preflight ## Build and start the development stack (db + dev sandbox + worker)
+dev-up: preflight ## Build and start the dev stack (db + sandbox + worker + Vite)
 	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d --build
 	@echo ""
+	@echo "  console (Vite): http://localhost:$${FRONTEND_PORT:-5173}/"
 	@echo "  dev API (air):  http://localhost:$${HOST_PORT:-8081}/"
+	@echo "  API docs:       http://localhost:$${HOST_PORT:-8081}/docs"
 	@echo "  seed jobs:      API_URL=http://localhost:$${HOST_PORT:-8081} make demo"
 	@echo "  logs:           make dev-log"
 	@echo ""
@@ -114,11 +132,11 @@ dev-up: preflight ## Build and start the development stack (db + dev sandbox + w
 dev-restart: preflight ## Restart the dev container after Dockerfile/deps changes
 	@docker compose --profile dev restart dev
 
-dev-down: ## Stop and remove the development stack (db + dev sandbox + worker)
+dev-down: ## Stop and remove the dev stack (db + sandbox + worker + frontend)
 	@docker compose --profile dev down
 
-dev-log: ## Follow dev sandbox + worker logs
-	@docker compose --profile dev logs -f dev worker
+dev-log: ## Follow dev sandbox + worker + frontend logs
+	@docker compose --profile dev logs -f dev worker frontend
 
 dev-build: preflight ## Rebuild the dev image without starting
 	@docker compose --profile dev build

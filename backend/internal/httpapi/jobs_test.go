@@ -31,6 +31,11 @@ type fakeStore struct {
 	requeueJob queue.Job
 	requeueErr error
 
+	requeueDeadQueue string
+	requeueDeadCount int
+	requeueDeadErr   error
+	requeueDeadCalls int
+
 	statsQueue string
 	stats      queue.Stats
 	statsErr   error
@@ -75,6 +80,15 @@ func (f *fakeStore) Requeue(_ context.Context, id string) (queue.Job, error) {
 		return queue.Job{}, f.requeueErr
 	}
 	return f.requeueJob, nil
+}
+
+func (f *fakeStore) RequeueDead(_ context.Context, queue string) (int, error) {
+	f.requeueDeadQueue = queue
+	f.requeueDeadCalls++
+	if f.requeueDeadErr != nil {
+		return 0, f.requeueDeadErr
+	}
+	return f.requeueDeadCount, nil
 }
 
 func (f *fakeStore) QueueStats(_ context.Context, name string) (queue.Stats, error) {
@@ -348,6 +362,71 @@ func TestHandleRequeueErrors(t *testing.T) {
 			}
 			if got := store.requeueID != ""; got != tc.wantCalled {
 				t.Errorf("store Requeue called = %v, want %v", got, tc.wantCalled)
+			}
+		})
+	}
+}
+
+func TestHandleRequeueDeadOK(t *testing.T) {
+	store := &fakeStore{requeueDeadCount: 3}
+
+	w := do(t, store, http.MethodPost, "/v1/queues/critical/requeue-dead", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if store.requeueDeadQueue != "critical" {
+		t.Errorf("store RequeueDead queue = %q, want %q", store.requeueDeadQueue, "critical")
+	}
+	var got struct {
+		Queue    string `json:"queue"`
+		Requeued int    `json:"requeued"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got.Queue != "critical" || got.Requeued != 3 {
+		t.Errorf("response = %+v, want queue=critical requeued=3", got)
+	}
+}
+
+func TestHandleRequeueDeadNoJobs(t *testing.T) {
+	store := &fakeStore{requeueDeadCount: 0}
+
+	w := do(t, store, http.MethodPost, "/v1/queues/empty/requeue-dead", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"requeued":0`) {
+		t.Errorf("body = %s, want requeued 0", w.Body.String())
+	}
+}
+
+func TestHandleRequeueDeadErrors(t *testing.T) {
+	cases := []struct {
+		name       string
+		target     string
+		storeErr   error
+		wantStatus int
+		wantCalled bool
+	}{
+		{"empty name", "/v1/queues/%20/requeue-dead", nil, http.StatusBadRequest, false},
+		{"internal error", "/v1/queues/critical/requeue-dead", errors.New("boom"), http.StatusInternalServerError, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeStore{requeueDeadErr: tc.storeErr}
+			w := do(t, store, http.MethodPost, tc.target, "")
+
+			if w.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d; body=%s", w.Code, tc.wantStatus, w.Body.String())
+			}
+			if strings.Contains(w.Body.String(), "boom") {
+				t.Errorf("internal error leaked to client: %s", w.Body.String())
+			}
+			if got := store.requeueDeadCalls > 0; got != tc.wantCalled {
+				t.Errorf("store RequeueDead called = %v, want %v", got, tc.wantCalled)
 			}
 		})
 	}

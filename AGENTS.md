@@ -71,7 +71,7 @@ distributed-task-queue/
 ├── go.mod / go.sum          # single root Go module (backend + frontend + docs embeds)
 ├── scripts/                 # dev-sandbox helper scripts (entrypoint, token resolution, …)
 ├── Dockerfile               # dev sandbox image (Go + gh + air fast reload)
-├── docker-compose.yml       # dev sandbox + local Postgres (`dev` + `db` services)
+├── docker-compose.yml       # dev stack + local Postgres (`dev` + `frontend` + `db` services)
 ├── mise.toml                # toolchain pins (go, gh) — host + dev image
 ├── .air.toml                # air fast-reload config (runs ./backend/cmd/api)
 ├── Makefile
@@ -113,20 +113,27 @@ performs. Add new checks to the `Makefile`.
 ### Dev sandbox
 
 The docker compose `dev` service is the development environment (gh + opencode
-pre-configured, `air` fast reload, no docker socket); a `db` service runs
-PostgreSQL for local development. Host-only tools are bootstrapped with
-`./scripts/setup-host-tools.sh` (installs mise, authenticates gh). Key targets:
+pre-configured, `air` fast reload, no docker socket) and the `frontend` service
+runs the Vite dev server next to it (hot reload for the dashboard); a `db`
+service runs PostgreSQL for local development. Host-only tools are bootstrapped
+with `./scripts/setup-host-tools.sh` (installs mise, authenticates gh). Key
+targets:
 
 ```bash
-make dev-up        # build + start the dev stack: db + sandbox + worker (needs docker on the host)
+make dev-up        # build + start the dev stack: db + sandbox + worker + Vite console (needs docker on the host)
 make dev-restart   # restart the dev container after Dockerfile/deps changes
 make dev-shell     # shell inside the container (alias: make shell)
 make dev-opencode  # run opencode inside the container (alias: make opencode)
-make dev-log       # follow sandbox + worker logs
-make dev-down      # stop and remove the dev stack (db + sandbox + worker)
+make dev-log       # follow sandbox + worker + frontend logs
+make dev-down      # stop and remove the dev stack (db + sandbox + worker + frontend)
 make prod-up       # build + start the production stack: db + api + worker (runtime image)
 make prod-down     # stop and remove the production stack
 ```
+
+`make dev-up` serves the Vite console on host `${FRONTEND_PORT:-5173}` (it proxies
+`/v1`, `/openapi`, `/docs`, `/swagger` to the air API — see
+`frontend/vite.config.ts`) and the air-reloaded API on `${HOST_PORT:-8081}` with
+the Swagger UI at `/docs`.
 
 The two stacks select their services via compose profiles (`dev` / `prod`) and
 share one `db` service, so run one at a time. `make dev-up` forwards
@@ -187,17 +194,41 @@ host, `./scripts/setup-host-tools.sh` bootstraps mise + gh.
   defined here, and values are never baked into the image.
 - `POSTGRES_PORT` — host port for the dev Postgres (defaults to `5432`; set it if
   the host already runs a database on `5432`).
+- `HOST_PORT` — host port for the dev air API (defaults to `8081`; the API
+  listens on 8080 inside the container).
+- `API_PORT` — host port for the production API (defaults to `8080`).
+- `FRONTEND_PORT` — host port for the Vite dev server (defaults to `5173`).
+- `PROJECT_NAME` — compose project name (defaults to `distributed-task-queue`).
+  It prefixes every Docker resource the stack creates (container names, the
+  default network, the `pgdata` volume), so a second checkout of this repo on
+  the same machine sets its own value to get isolated resources instead of
+  colliding with the first.
+- `DEV_IMAGE` — local dev image tag shared by the `dev` and `frontend`
+  services (defaults to `distributed-task-queue-dev`). Give a second checkout
+  its own tag so concurrent `make dev-up` runs do not race on one image.
 - `HOST_HOME` — optional override for the host home directory used by the
   read-only config mounts (defaults to `$HOME`).
+- `.env.example` is the committed template of the compose-interpolated host
+  variables, pre-filled with conflict-free host ports (+10000 off the built-in
+  defaults: `15173` / `18081` / `18080` / `15432`) so sibling projects do not
+  clash. Copy it to `.env` (gitignored) and edit — `docker compose` reads
+  `.env` automatically, the Makefile exports the four port variables for
+  `dev-up` / `prod-up`, and `scripts/demo.sh` reads it too, so printed URLs and
+  the seed script agree with the ports actually bound. Shell env wins over
+  `.env` (matching compose's own precedence). Keep `.env` values plain
+  `KEY=value` lines (`#` comments ok; no quotes needed for ports).
+  `PROJECT_NAME` and `DEV_IMAGE` need no Makefile support — compose reads them
+  straight from `.env`.
 - This project reads API/worker configuration from command-line flags plus
-  `DATABASE_URL`. If a `.env` or `.env.*` file is introduced later, it is
-  gitignored and the secret-file rules below apply.
+  `DATABASE_URL`. A `.env` or `.env.*` file may exist locally (`.env.example`
+  is the safe-to-read template); all of them are gitignored and the
+  secret-file rules below apply.
 
 ## Key Conventions
 
 - **Assignee**: `fiwon123` — `workflow.md` tells agents to read `ASSIGNEE` from here before assigning issues and PRs
 - **GitHub credentials**: `GH_TOKEN` or `GITHUB_TOKEN` — either name works. Do not set either here: values belong in the host environment, and the dev sandbox forwards whichever is valid at runtime.
-- **Dev sandbox**: docker compose `dev` + `db` services (gh + opencode pre-configured, no docker socket); `make dev-up` / `dev-restart` / `dev-shell` / `dev-opencode` / `dev-down`. A separate `prod` profile/stack (`make prod-up` / `prod-down`) runs the runtime `api` + `worker`; the two share one `db`, so run one at a time
+- **Dev sandbox**: docker compose `dev` + `frontend` + `db` services (gh + opencode pre-configured, no docker socket); `make dev-up` / `dev-restart` / `dev-shell` / `dev-opencode` / `dev-down`. A separate `prod` profile/stack (`make prod-up` / `prod-down`) runs the runtime `api` + `worker`; the two share one `db`, so run one at a time
 - **Model assignments**: an example, not a recommendation — `opencode.json` assigns `opencode/big-pickle` to `build` and `opencode/mimo-v2.6-flash-free` to `plan`. Change them to whatever your install offers; no prompt depends on which model an agent runs. Verify an id with `opencode models` first.
 - Linting / formatting: `gofmt` for all Go code; `go vet` for static analysis
 - Testing: the standard `testing` package (`go test ./...`); Postgres integration tests are gated behind a build tag so unit tests need no services

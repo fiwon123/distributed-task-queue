@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { listJobs, listQueues, queueStats, requeueJob } from "./api";
+import { listJobs, listQueues, queueStats, requeueDeadJobs, requeueJob } from "./api";
 import EnqueueForm from "./EnqueueForm";
 import { STATUSES, errorMessage, isRequeueable, jobSummary, shortID } from "./format";
+import QueueComposition from "./QueueComposition";
 import { AppLink } from "./router";
+import Toast from "./Toast";
 import type { Job, QueueInfo, Stats, Status } from "./types";
 
 // JobsView is the console: a queue/status filter over the job list, per-queue
@@ -14,8 +16,11 @@ export default function JobsView() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<ReactNode>(null);
+  // Each notice carries an id so a new message remounts the toast (fresh
+  // countdown) instead of mutating the one already on screen.
+  const [notice, setNotice] = useState<{ id: number; node: ReactNode } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [showEnqueue, setShowEnqueue] = useState(false);
 
   const loadQueues = useCallback(async () => {
@@ -58,21 +63,43 @@ export default function JobsView() {
     void loadQueue();
   }, [loadQueue]);
 
+  const showNotice = useCallback((node: ReactNode) => {
+    setNotice((current) => ({ id: (current?.id ?? 0) + 1, node }));
+  }, []);
+
   async function onRequeue(job: Job) {
     setNotice(null);
     setError(null);
     try {
       await requeueJob(job.id);
-      setNotice(`Requeued ${shortID(job.id)}`);
+      showNotice(`Requeued ${shortID(job.id)}`);
       await Promise.all([loadQueue(), loadQueues()]);
     } catch (err) {
       setError(errorMessage(err));
     }
   }
 
+  async function onRequeueDead() {
+    setError(null);
+    setBulkBusy(true);
+    try {
+      const { requeued } = await requeueDeadJobs(selected);
+      showNotice(
+        requeued === 0
+          ? "No dead jobs to requeue"
+          : `Requeued ${requeued} dead ${requeued === 1 ? "job" : "jobs"}`,
+      );
+      await Promise.all([loadQueue(), loadQueues()]);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function onEnqueued(job: Job) {
     setError(null);
-    setNotice(
+    showNotice(
       <>
         Enqueued{" "}
         <AppLink to={`/jobs/${job.id}`}>
@@ -87,6 +114,8 @@ export default function JobsView() {
     setNotice(null);
     await Promise.all([loadQueues(), loadQueue()]);
   }
+
+  const dismissNotice = useCallback(() => setNotice(null), []);
 
   return (
     <>
@@ -121,6 +150,7 @@ export default function JobsView() {
         </button>
         <button
           type="button"
+          className="primary"
           aria-expanded={showEnqueue}
           onClick={() => setShowEnqueue((shown) => !shown)}
         >
@@ -133,11 +163,7 @@ export default function JobsView() {
           {error}
         </p>
       )}
-      {notice && (
-        <p className="banner notice" role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <Toast key={notice.id} message={notice.node} onDismiss={dismissNotice} />}
 
       {showEnqueue && <EnqueueForm onEnqueued={onEnqueued} onError={setError} />}
 
@@ -149,6 +175,17 @@ export default function JobsView() {
               <span className="card-label">{s}</span>
             </div>
           ))}
+        {stats && <QueueComposition counts={stats.counts} />}
+        {stats && (stats.counts.dead ?? 0) > 0 && (
+          <button
+            type="button"
+            className="primary stats-action"
+            onClick={() => void onRequeueDead()}
+            disabled={bulkBusy}
+          >
+            {bulkBusy ? "Requeuing…" : "Requeue all dead"}
+          </button>
+        )}
       </section>
 
       <section aria-label="jobs">
@@ -156,7 +193,10 @@ export default function JobsView() {
           Jobs <span className="muted">({jobs.length})</span>
         </h2>
         {jobs.length === 0 ? (
-          <p className="muted">No jobs match this filter.</p>
+          <div className="empty-state">
+            <p>No jobs match this filter.</p>
+            <p className="muted">Use New job to enqueue one, then refresh.</p>
+          </div>
         ) : (
           <table>
             <thead>

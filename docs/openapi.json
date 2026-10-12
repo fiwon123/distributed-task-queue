@@ -225,6 +225,24 @@
         ],
         "type": "object"
       },
+      "RequeueDeadResult": {
+        "properties": {
+          "queue": {
+            "example": "default",
+            "type": "string"
+          },
+          "requeued": {
+            "description": "Number of dead-lettered jobs returned to `pending`.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queue",
+          "requeued"
+        ],
+        "type": "object"
+      },
       "Stats": {
         "properties": {
           "counts": {
@@ -466,6 +484,46 @@
         ]
       }
     },
+    "/v1/queues/{name}/requeue-dead": {
+      "post": {
+        "description": "Returns every `dead` job in the queue to `pending`: clears the lease and\nerror, resets `attempts` to 0, and makes each claimable immediately. Jobs\nin any other state are untouched. A queue with no dead jobs reports\n`requeued: 0` rather than an error, so the call is safe to retry.\n",
+        "operationId": "requeueDeadJobs",
+        "parameters": [
+          {
+            "description": "Queue name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequeueDeadResult"
+                }
+              }
+            },
+            "description": "The number of dead-lettered jobs returned to `pending`."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Requeue all dead-lettered jobs in a queue",
+        "tags": [
+          "queues"
+        ]
+      }
+    },
     "/v1/queues/{name}/stats": {
       "get": {
         "description": "Counts of jobs in each state for a queue. Every state appears in the\nresponse even when its count is zero; an unknown queue returns all zeros.\n",
@@ -509,8 +567,8 @@
   },
   "servers": [
     {
-      "description": "Local stack (docker compose / make stack-up)",
-      "url": "http://localhost:8080"
+      "description": "Same origin as this page",
+      "url": "/"
     }
   ],
   "tags": [
