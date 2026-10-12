@@ -53,8 +53,9 @@ func (s *Server) WithDashboard(fsys fs.FS) *Server {
 	return s
 }
 
-// WithOpenAPI mounts the API documentation: fsys must contain openapi.yaml and
-// docs.html, served at /openapi.yaml and /docs respectively. It returns the
+// WithOpenAPI mounts the API documentation: fsys must contain openapi.yaml,
+// openapi.json, docs.html, and a swagger/ asset directory, served at
+// /openapi.yaml, /openapi.json, /docs, and /swagger/ respectively. It returns the
 // receiver for chaining.
 func (s *Server) WithOpenAPI(fsys fs.FS) *Server {
 	s.apiDocs = fsys
@@ -90,7 +91,13 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.apiDocs != nil {
 		mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
+		mux.HandleFunc("GET /openapi.json", s.handleOpenAPIJSON)
 		mux.HandleFunc("GET /docs", s.handleAPIDocs)
+		// The vendored Swagger UI assets are served from /swagger/; a missing
+		// subdirectory just leaves those routes unregistered.
+		if assets, err := fs.Sub(s.apiDocs, "swagger"); err == nil {
+			mux.Handle("GET /swagger/", http.StripPrefix("/swagger/", http.FileServerFS(assets)))
+		}
 	}
 	if s.dashboard != nil {
 		mux.Handle("/", s.spaHandler())
@@ -107,6 +114,19 @@ func (s *Server) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+	_, _ = w.Write(body)
+}
+
+// handleOpenAPIJSON serves the embedded document as JSON. It is a generated
+// artifact (see docs/generate) so this handler needs no YAML dependency.
+func (s *Server) handleOpenAPIJSON(w http.ResponseWriter, r *http.Request) {
+	body, err := fs.ReadFile(s.apiDocs, "openapi.json")
+	if err != nil {
+		s.log.Error("read openapi json", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_, _ = w.Write(body)
 }
 

@@ -101,8 +101,9 @@ document at `/openapi.yaml` with an interactive UI at `/docs`. See
 ## API
 
 All five JSON endpoints are implemented. The dashboard is served at `/`, and the
-API serves its own documentation: the raw OpenAPI 3 document at `/openapi.yaml`
-and an interactive Swagger UI at `/docs`.
+API serves its own documentation: the OpenAPI 3 document at `/openapi.yaml` and
+`/openapi.json`, and an offline Swagger UI at `/docs` (assets vendored under
+`docs/swagger/`, so the page needs no internet access).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -113,15 +114,19 @@ and an interactive Swagger UI at `/docs`.
 | `GET` | `/v1/queues` | List known queues with total job counts |
 | `GET` | `/v1/queues/{name}/stats` | Counts by state for a queue |
 | `GET` | `/` | Web dashboard (single-page app; unknown non-`/v1` paths fall back to it) |
-| `GET` | `/docs` | Interactive API docs (Swagger UI, renders `/openapi.yaml`) |
-| `GET` | `/openapi.yaml` | The OpenAPI 3.0 document itself |
+| `GET` | `/docs` | Interactive API docs (offline Swagger UI, renders `/openapi.json`) |
+| `GET` | `/openapi.yaml` | The OpenAPI 3.0 document as YAML |
+| `GET` | `/openapi.json` | The OpenAPI 3.0 document as JSON (generated from the YAML) |
+| `GET` | `/swagger/*` | Vendored Swagger UI assets used by `/docs` |
 
 ## API reference
 
 The contract lives in [`docs/openapi.yaml`](docs/openapi.yaml) and is the source
 of truth, not a description written after the fact:
 
-- the running API serves it at `/openapi.yaml`, with a Swagger UI at `/docs`;
+- the running API serves it at `/openapi.yaml` (and as generated JSON at
+  `/openapi.json`), with an offline Swagger UI at `/docs` whose assets are
+  vendored under `docs/swagger/`;
 - `backend/internal/httpapi/openapi_test.go` fails the build if a route is registered but
   undocumented (or a documented path has no handler), so the spec cannot drift
   from the code; and
@@ -129,7 +134,9 @@ of truth, not a description written after the fact:
   the schema the spec declares for that status code.
 
 To change the API, edit the handler **and** `docs/openapi.yaml`; `go test ./...`
-will tell you if they disagree.
+will tell you if they disagree. `docs/openapi.json` is generated from the YAML —
+regenerate it with `make openapi-json` and commit the result (a test fails if it
+drifts).
 
 ## Design choices
 

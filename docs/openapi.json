@@ -1,0 +1,526 @@
+{
+  "components": {
+    "parameters": {
+      "JobId": {
+        "description": "Job identifier.",
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The request was invalid (bad JSON, missing/unknown fields, or a bad filter)."
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "The job exists but is not in a requeueable state."
+      },
+      "InternalError": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "An unexpected server or database error."
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "No job with that id exists."
+      }
+    },
+    "schemas": {
+      "EnqueueRequest": {
+        "properties": {
+          "max_attempts": {
+            "default": 3,
+            "description": "Retry ceiling before dead-lettering.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "payload": {
+            "description": "Arbitrary JSON handed to the handler. Defaults to `{}`."
+          },
+          "queue": {
+            "default": "default",
+            "description": "Queue name. Defaults to `default`.",
+            "type": "string"
+          },
+          "run_at": {
+            "description": "Earliest time the job may be claimed. Defaults to now.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "description": "Handler name the worker dispatches on (e.g. `echo`).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "Job": {
+        "properties": {
+          "attempts": {
+            "description": "How many times the job has been attempted.",
+            "example": 0,
+            "type": "integer"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_error": {
+            "description": "The most recent failure message.",
+            "nullable": true,
+            "type": "string"
+          },
+          "locked_until": {
+            "description": "Lease expiry for the worker currently holding the job.",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "max_attempts": {
+            "description": "Retry ceiling before the job is dead-lettered.",
+            "example": 3,
+            "type": "integer"
+          },
+          "payload": {
+            "description": "Arbitrary JSON handed to the handler. Defaults to `{}`."
+          },
+          "queue": {
+            "example": "default",
+            "type": "string"
+          },
+          "run_at": {
+            "description": "When the job next becomes claimable (drives backoff).",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "type": {
+            "description": "Handler name the worker dispatches on.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "payload",
+          "queue",
+          "status",
+          "attempts",
+          "max_attempts",
+          "run_at",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "JobList": {
+        "properties": {
+          "count": {
+            "description": "Number of jobs in this page (not the total in the queue).",
+            "type": "integer"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "jobs",
+          "count"
+        ],
+        "type": "object"
+      },
+      "JobStatus": {
+        "description": "A job's lifecycle state:\n`pending` (enqueued, not yet claimed), `running` (held under a lease),\n`completed`, `failed` (last attempt failed; may be retried), or\n`dead` (attempts exhausted; dead-lettered).\n",
+        "enum": [
+          "pending",
+          "running",
+          "completed",
+          "failed",
+          "dead"
+        ],
+        "type": "string"
+      },
+      "QueueInfo": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "total"
+        ],
+        "type": "object"
+      },
+      "QueueList": {
+        "properties": {
+          "queues": {
+            "items": {
+              "$ref": "#/components/schemas/QueueInfo"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "queues"
+        ],
+        "type": "object"
+      },
+      "Stats": {
+        "properties": {
+          "counts": {
+            "properties": {
+              "completed": {
+                "type": "integer"
+              },
+              "dead": {
+                "type": "integer"
+              },
+              "failed": {
+                "type": "integer"
+              },
+              "pending": {
+                "type": "integer"
+              },
+              "running": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "dead"
+            ],
+            "type": "object"
+          },
+          "queue": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queue",
+          "counts",
+          "total"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "HTTP API for the PostgreSQL-backed distributed task queue.\n\nProducers enqueue jobs; workers claim due jobs inside a short transaction\nwith `FOR UPDATE SKIP LOCKED` and run them. A claimed job is hidden behind a\nlease (`locked_until`); if the worker dies the lease expires and the job\nbecomes claimable again. Failed attempts are retried with exponential\nbackoff until `max_attempts`, after which the job moves to the `dead`\n(dead-letter) state and can be requeued.\n\nDelivery is **at-least-once**: a worker can die after a job's side effect but\nbefore its status update, so handlers must be idempotent.\n\nThis API also serves an interactive UI at `/docs` and the raw spec at\n`/openapi.yaml`; the web dashboard is served at `/`.\n",
+    "license": {
+      "name": "Educational project — not production-ready"
+    },
+    "title": "distributed-task-queue API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/v1/jobs": {
+      "get": {
+        "description": "Returns jobs newest first, optionally filtered by queue and status.",
+        "operationId": "listJobs",
+        "parameters": [
+          {
+            "description": "Only return jobs in this queue.",
+            "in": "query",
+            "name": "queue",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only return jobs in this lifecycle state.",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "$ref": "#/components/schemas/JobStatus"
+            }
+          },
+          {
+            "description": "Maximum number of jobs to return. Defaults to 50; requests above the\nmaximum (500) are clamped rather than rejected.\n",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobList"
+                }
+              }
+            },
+            "description": "A page of jobs."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "List jobs",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "post": {
+        "description": "Creates a job. `type` is required and selects the worker handler\n(`echo`, `fail`, and `sleep` are registered by `backend/cmd/worker`). Unknown\ntop-level JSON fields are rejected.\n",
+        "operationId": "enqueueJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Job enqueued."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Enqueue a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{id}": {
+      "get": {
+        "operationId": "getJob",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "The job."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Get a job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/jobs/{id}/requeue": {
+      "post": {
+        "description": "Moves a `dead` or `failed` job back to `pending`: clears the lease and\nerror, resets `attempts` to 0, and makes it claimable immediately. A job\nin any other state is rejected with `409`.\n",
+        "operationId": "requeueJob",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "The requeued job (now `pending`)."
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Requeue a dead-lettered or failed job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/v1/queues": {
+      "get": {
+        "description": "Returns every queue that has at least one job, with its total.",
+        "operationId": "listQueues",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueList"
+                }
+              }
+            },
+            "description": "Known queues."
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "List queues",
+        "tags": [
+          "queues"
+        ]
+      }
+    },
+    "/v1/queues/{name}/stats": {
+      "get": {
+        "description": "Counts of jobs in each state for a queue. Every state appears in the\nresponse even when its count is zero; an unknown queue returns all zeros.\n",
+        "operationId": "getQueueStats",
+        "parameters": [
+          {
+            "description": "Queue name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                }
+              }
+            },
+            "description": "Counts by state for the queue."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Queue statistics",
+        "tags": [
+          "queues"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local stack (docker compose / make stack-up)",
+      "url": "http://localhost:8080"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Enqueue jobs and inspect or requeue them.",
+      "name": "jobs"
+    },
+    {
+      "description": "Queue-level listings and statistics.",
+      "name": "queues"
+    }
+  ]
+}

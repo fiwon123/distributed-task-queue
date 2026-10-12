@@ -67,7 +67,7 @@ distributed-task-queue/
 ├── frontend/                # React + TypeScript dashboard (Vite; embeds frontend/dist)
 │   ├── src/                 # the single-page app
 │   └── dist/                # committed build output (`go:embed`, `make frontend-build`)
-├── docs/                    # OpenAPI spec + Swagger UI, embedded and served by the API
+├── docs/                    # OpenAPI spec (YAML+JSON) + vendored Swagger UI + generator
 ├── go.mod / go.sum          # single root Go module (backend + frontend + docs embeds)
 ├── scripts/                 # dev-sandbox helper scripts (entrypoint, token resolution, …)
 ├── Dockerfile               # dev sandbox image (Go + gh + air fast reload)

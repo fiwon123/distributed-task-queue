@@ -4,10 +4,24 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>distributed-task-queue — API docs</title>
+    <!--
+      Swagger UI (swagger-ui-dist, pinned) is vendored under docs/swagger/ and
+      served by this process at /swagger/, so this page needs no internet access.
+      The spec it renders is served by this same process at /openapi.json.
+    -->
     <link
-      rel="stylesheet"
-      href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="/swagger/favicon-32x32.png"
     />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="/swagger/favicon-16x16.png"
+    />
+    <link rel="stylesheet" href="/swagger/swagger-ui.css" />
     <style>
       body {
         margin: 0;
@@ -22,15 +36,10 @@
   <body>
     <div id="swagger-ui"></div>
 
-    <!--
-      Swagger UI is loaded from a CDN, so this page needs internet access in the
-      browser. The spec it renders is served by this same process at
-      /openapi.yaml — there is no build step and nothing to keep in sync.
-    -->
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="/swagger/swagger-ui-bundle.js"></script>
     <script>
       window.ui = SwaggerUIBundle({
-        url: "/openapi.yaml",
+        url: "/openapi.json",
         dom_id: "#swagger-ui",
         deepLinking: true,
         presets: [SwaggerUIBundle.presets.apis],
