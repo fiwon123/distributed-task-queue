@@ -52,6 +52,13 @@ Follow the worker as it processes the demo jobs with `make prod-logs`. Set
 `API_PORT` if `8080` is taken on the host. Tear down with `make prod-down`
 (keeps data) or `make prod-reset` (also deletes the Postgres volume).
 
+Running several projects side by side? Copy the committed template to `.env`
+(`cp .env.example .env`) and adjust the host ports — it pre-fills the
+compose-interpolated variables with conflict-free values
+(`15173` / `18081` / `18080` / `15432`). `docker compose` reads `.env`
+automatically and the Makefile / `scripts/demo.sh` honor it when printing URLs
+or seeding jobs.
+
 ### Development (edit code, fast reload)
 
 The dev stack runs the API through `air` (fast reload), a worker so enqueued jobs
@@ -67,6 +74,10 @@ Then open:
 - **Console (Vite, hot reload)** — <http://localhost:5173/> (override with `FRONTEND_PORT`)
 - **Dev API (air)** — <http://localhost:8081/> (override with `HOST_PORT`)
 - **API docs** — <http://localhost:8081/docs>
+
+Editable per project via `.env` (see the note above): `cp .env.example .env`
+then change `FRONTEND_PORT` / `HOST_PORT` to whatever your other projects are
+not using.
 
 Both sides hot-reload: editing `frontend/src` updates the browser via HMR, and
 editing a Go handler rebuilds through `air`. Vite proxies `/v1`, `/openapi`,

@@ -194,11 +194,25 @@ host, `./scripts/setup-host-tools.sh` bootstraps mise + gh.
   defined here, and values are never baked into the image.
 - `POSTGRES_PORT` — host port for the dev Postgres (defaults to `5432`; set it if
   the host already runs a database on `5432`).
+- `HOST_PORT` — host port for the dev air API (defaults to `8081`; the API
+  listens on 8080 inside the container).
+- `API_PORT` — host port for the production API (defaults to `8080`).
+- `FRONTEND_PORT` — host port for the Vite dev server (defaults to `5173`).
 - `HOST_HOME` — optional override for the host home directory used by the
   read-only config mounts (defaults to `$HOME`).
+- `.env.example` is the committed template of the compose-interpolated host
+  variables, pre-filled with conflict-free host ports (+10000 off the built-in
+  defaults: `15173` / `18081` / `18080` / `15432`) so sibling projects do not
+  clash. Copy it to `.env` (gitignored) and edit — `docker compose` reads
+  `.env` automatically, the Makefile exports the four port variables for
+  `dev-up` / `prod-up`, and `scripts/demo.sh` reads it too, so printed URLs and
+  the seed script agree with the ports actually bound. Shell env wins over
+  `.env` (matching compose's own precedence). Keep `.env` values plain
+  `KEY=value` lines (`#` comments ok; no quotes needed for ports).
 - This project reads API/worker configuration from command-line flags plus
-  `DATABASE_URL`. If a `.env` or `.env.*` file is introduced later, it is
-  gitignored and the secret-file rules below apply.
+  `DATABASE_URL`. A `.env` or `.env.*` file may exist locally (`.env.example`
+  is the safe-to-read template); all of them are gitignored and the
+  secret-file rules below apply.
 
 ## Key Conventions
 
