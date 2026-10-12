@@ -21,6 +21,7 @@ type JobStore interface {
 	Enqueue(ctx context.Context, p queue.EnqueueParams) (queue.Job, error)
 	Get(ctx context.Context, id string) (queue.Job, error)
 	Requeue(ctx context.Context, id string) (queue.Job, error)
+	RequeueDead(ctx context.Context, queue string) (int, error)
 	QueueStats(ctx context.Context, queue string) (queue.Stats, error)
 	ListJobs(ctx context.Context, p queue.ListParams) ([]queue.Job, error)
 	ListQueues(ctx context.Context) ([]queue.QueueInfo, error)
@@ -79,6 +80,7 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/v1/jobs/{id}", s.handleGetJob},
 		{http.MethodPost, "/v1/jobs/{id}/requeue", s.handleRequeue},
 		{http.MethodGet, "/v1/queues", s.handleListQueues},
+		{http.MethodPost, "/v1/queues/{name}/requeue-dead", s.handleRequeueDead},
 		{http.MethodGet, "/v1/queues/{name}/stats", s.handleQueueStats},
 	}
 }

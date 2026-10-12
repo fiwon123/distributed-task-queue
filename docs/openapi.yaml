@@ -192,6 +192,36 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /v1/queues/{name}/requeue-dead:
+    post:
+      operationId: requeueDeadJobs
+      tags: [queues]
+      summary: Requeue all dead-lettered jobs in a queue
+      description: |
+        Returns every `dead` job in the queue to `pending`: clears the lease and
+        error, resets `attempts` to 0, and makes each claimable immediately. Jobs
+        in any other state are untouched. A queue with no dead jobs reports
+        `requeued: 0` rather than an error, so the call is safe to retry.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Queue name.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: The number of dead-lettered jobs returned to `pending`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequeueDeadResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
 components:
   parameters:
     JobId:
@@ -369,6 +399,18 @@ components:
               type: integer
         total:
           type: integer
+
+    RequeueDeadResult:
+      type: object
+      required: [queue, requeued]
+      properties:
+        queue:
+          type: string
+          example: default
+        requeued:
+          type: integer
+          minimum: 0
+          description: Number of dead-lettered jobs returned to `pending`.
 
     Error:
       type: object

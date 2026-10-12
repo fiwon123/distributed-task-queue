@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { listJobs, listQueues, queueStats, requeueJob } from "./api";
+import { listJobs, listQueues, queueStats, requeueDeadJobs, requeueJob } from "./api";
 import EnqueueForm from "./EnqueueForm";
 import { STATUSES, errorMessage, isRequeueable, jobSummary, shortID } from "./format";
 import QueueComposition from "./QueueComposition";
@@ -20,6 +20,7 @@ export default function JobsView() {
   // countdown) instead of mutating the one already on screen.
   const [notice, setNotice] = useState<{ id: number; node: ReactNode } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [showEnqueue, setShowEnqueue] = useState(false);
 
   const loadQueues = useCallback(async () => {
@@ -75,6 +76,24 @@ export default function JobsView() {
       await Promise.all([loadQueue(), loadQueues()]);
     } catch (err) {
       setError(errorMessage(err));
+    }
+  }
+
+  async function onRequeueDead() {
+    setError(null);
+    setBulkBusy(true);
+    try {
+      const { requeued } = await requeueDeadJobs(selected);
+      showNotice(
+        requeued === 0
+          ? "No dead jobs to requeue"
+          : `Requeued ${requeued} dead ${requeued === 1 ? "job" : "jobs"}`,
+      );
+      await Promise.all([loadQueue(), loadQueues()]);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -157,6 +176,16 @@ export default function JobsView() {
             </div>
           ))}
         {stats && <QueueComposition counts={stats.counts} />}
+        {stats && (stats.counts.dead ?? 0) > 0 && (
+          <button
+            type="button"
+            className="primary stats-action"
+            onClick={() => void onRequeueDead()}
+            disabled={bulkBusy}
+          >
+            {bulkBusy ? "Requeuing…" : "Requeue all dead"}
+          </button>
+        )}
       </section>
 
       <section aria-label="jobs">

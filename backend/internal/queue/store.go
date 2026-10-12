@@ -155,6 +155,28 @@ func (s *Store) Requeue(ctx context.Context, id string) (Job, error) {
 	}
 }
 
+const requeueDeadSQL = `
+UPDATE jobs
+SET status       = 'pending',
+    attempts     = 0,
+    run_at       = now(),
+    locked_until = NULL,
+    last_error   = NULL,
+    completed_at = NULL
+WHERE queue = $1 AND status = 'dead'`
+
+// RequeueDead returns every dead-lettered job in a queue to the pending state
+// with a fresh retry budget (attempts 0, run_at now, lease and error cleared),
+// and reports how many jobs it revived. A queue with no dead jobs yields 0
+// rather than an error, so the operation is safe to retry.
+func (s *Store) RequeueDead(ctx context.Context, queueName string) (int, error) {
+	tag, err := s.pool.Exec(ctx, requeueDeadSQL, queueName)
+	if err != nil {
+		return 0, fmt.Errorf("requeue dead jobs: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 // QueueStats reports the census of job states for a queue.
 type Stats struct {
 	Queue  string         `json:"queue"`
