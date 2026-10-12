@@ -64,8 +64,8 @@ distributed-task-queue/
 │   ├── internal/queue/      # the job store: schema, claim (FOR UPDATE SKIP LOCKED), status
 │   ├── internal/worker/     # worker pool: claim, dispatch, retry/backoff, leases
 │   └── migrations/          # SQL migrations for the jobs table
-├── frontend/                # React + TypeScript dashboard (Vite; embeds frontend/dist)
-│   ├── src/                 # the single-page app
+├── frontend/                # React + TypeScript console (Vite; embeds frontend/dist)
+│   ├── src/                 # the single-page app: browse/enqueue jobs, live job detail
 │   └── dist/                # committed build output (`go:embed`, `make frontend-build`)
 ├── docs/                    # OpenAPI spec (YAML+JSON) + vendored Swagger UI + generator
 ├── go.mod / go.sum          # single root Go module (backend + frontend + docs embeds)

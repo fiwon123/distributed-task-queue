@@ -7,6 +7,22 @@ export function isRequeueable(status: Status): boolean {
   return status === "dead" || status === "failed";
 }
 
+// isTerminal reports whether a job has reached a final state. Non-terminal jobs
+// (pending, running) are still moving, so the console keeps polling them.
+export function isTerminal(status: Status): boolean {
+  return status === "completed" || status === "failed" || status === "dead";
+}
+
+// prettyJSON renders a value as indented JSON, falling back to String() for
+// cycles or other values JSON cannot represent.
+export function prettyJSON(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }

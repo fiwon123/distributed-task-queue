@@ -25,3 +25,13 @@ export interface Stats {
   counts: Record<Status, number>;
   total: number;
 }
+
+// EnqueueRequest is the POST /v1/jobs body. Only `type` is required; the API
+// defaults the rest (queue "default", payload {}, run_at now, max_attempts 3).
+export interface EnqueueRequest {
+  type: string;
+  payload?: unknown;
+  queue?: string;
+  run_at?: string;
+  max_attempts?: number;
+}

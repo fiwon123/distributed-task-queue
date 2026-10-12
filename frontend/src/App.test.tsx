@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type { Job, QueueInfo, Stats } from "./types";
 
@@ -59,6 +59,7 @@ function installFetch(): Call[] {
       if (url.includes("/requeue")) return jsonResponse({ ...deadJob, status: "pending" });
       if (url.endsWith("/v1/queues")) return jsonResponse({ queues });
       if (url.endsWith("/stats")) return jsonResponse(stats);
+      if (/^\/v1\/jobs\/[^/?]+$/.test(url)) return jsonResponse(deadJob);
       if (url.startsWith("/v1/jobs"))
         return jsonResponse({ jobs: [deadJob, completedJob], count: 2 });
       return jsonResponse({ error: "not found" }, 404);
@@ -66,6 +67,11 @@ function installFetch(): Call[] {
   );
   return calls;
 }
+
+beforeEach(() => {
+  // Each test starts at the console route.
+  window.history.pushState({}, "", "/");
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -114,5 +120,15 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+  });
+
+  it("renders the job detail for a /jobs/{id} deep link", async () => {
+    window.history.pushState({}, "", `/jobs/${deadJob.id}`);
+    installFetch();
+    render(<App />);
+
+    const detail = await screen.findByRole("region", { name: "job detail" });
+    expect(within(detail).getByText("email")).toBeInTheDocument();
+    expect(within(detail).getByText("kaboom")).toBeInTheDocument();
   });
 });

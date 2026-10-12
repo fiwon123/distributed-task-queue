@@ -1,4 +1,4 @@
-import type { Job, QueueInfo, Stats, Status } from "./types";
+import type { EnqueueRequest, Job, QueueInfo, Stats, Status } from "./types";
 
 async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -40,4 +40,16 @@ export function listJobs(params: JobQuery): Promise<{ jobs: Job[]; count: number
 
 export function requeueJob(id: string): Promise<Job> {
   return getJSON(`/v1/jobs/${encodeURIComponent(id)}/requeue`, { method: "POST" });
+}
+
+export function getJob(id: string): Promise<Job> {
+  return getJSON(`/v1/jobs/${encodeURIComponent(id)}`);
+}
+
+export function enqueueJob(req: EnqueueRequest): Promise<Job> {
+  return getJSON("/v1/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
 }

@@ -77,8 +77,8 @@ vice versa).
 table, `POST /v1/jobs` / `GET /v1/jobs/{id}`, a worker pool that claims jobs with
 `FOR UPDATE SKIP LOCKED`, exponential-backoff retries, lease-based recovery of
 jobs abandoned by a dead worker, dead-letter requeue, per-queue stats, graceful
-shutdown, and a small web dashboard (bundled into the API binary) for browsing
-queues and jobs.
+shutdown, and a small web console (bundled into the API binary) for browsing
+queues and jobs, enqueueing new jobs, and watching a job's status live.
 
 The whole stack also runs with one command — `make prod-up` starts Postgres, the
 API, and a worker via Docker Compose — and the API serves its own OpenAPI
@@ -113,7 +113,7 @@ API serves its own documentation: the OpenAPI 3 document at `/openapi.yaml` and
 | `POST` | `/v1/jobs/{id}/requeue` | Requeue a dead-lettered or failed job |
 | `GET` | `/v1/queues` | List known queues with total job counts |
 | `GET` | `/v1/queues/{name}/stats` | Counts by state for a queue |
-| `GET` | `/` | Web dashboard (single-page app; unknown non-`/v1` paths fall back to it) |
+| `GET` | `/` | Web console (single-page app: browse & enqueue jobs, per-job detail with live status; unknown non-`/v1` paths fall back to it) |
 | `GET` | `/docs` | Interactive API docs (offline Swagger UI, renders `/openapi.json`) |
 | `GET` | `/openapi.yaml` | The OpenAPI 3.0 document as YAML |
 | `GET` | `/openapi.json` | The OpenAPI 3.0 document as JSON (generated from the YAML) |
@@ -161,7 +161,7 @@ drifts).
 - [x] 5. Leases: `locked_until`; reclaim a job from a worker killed mid-job
 - [x] 6. Dead-letter: dead state + requeue endpoint
 - [x] 7. Graceful shutdown: stop claiming and drain
-- [x] 8. Dashboard: list endpoints + an embedded web UI
+- [x] 8. Console: browse/enqueue jobs, per-job detail with live status (embedded web UI)
 
 ## Done when
 
