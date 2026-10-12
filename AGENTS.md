@@ -198,6 +198,14 @@ host, `./scripts/setup-host-tools.sh` bootstraps mise + gh.
   listens on 8080 inside the container).
 - `API_PORT` — host port for the production API (defaults to `8080`).
 - `FRONTEND_PORT` — host port for the Vite dev server (defaults to `5173`).
+- `PROJECT_NAME` — compose project name (defaults to `distributed-task-queue`).
+  It prefixes every Docker resource the stack creates (container names, the
+  default network, the `pgdata` volume), so a second checkout of this repo on
+  the same machine sets its own value to get isolated resources instead of
+  colliding with the first.
+- `DEV_IMAGE` — local dev image tag shared by the `dev` and `frontend`
+  services (defaults to `distributed-task-queue-dev`). Give a second checkout
+  its own tag so concurrent `make dev-up` runs do not race on one image.
 - `HOST_HOME` — optional override for the host home directory used by the
   read-only config mounts (defaults to `$HOME`).
 - `.env.example` is the committed template of the compose-interpolated host
@@ -209,6 +217,8 @@ host, `./scripts/setup-host-tools.sh` bootstraps mise + gh.
   the seed script agree with the ports actually bound. Shell env wins over
   `.env` (matching compose's own precedence). Keep `.env` values plain
   `KEY=value` lines (`#` comments ok; no quotes needed for ports).
+  `PROJECT_NAME` and `DEV_IMAGE` need no Makefile support — compose reads them
+  straight from `.env`.
 - This project reads API/worker configuration from command-line flags plus
   `DATABASE_URL`. A `.env` or `.env.*` file may exist locally (`.env.example`
   is the safe-to-read template); all of them are gitignored and the

@@ -35,7 +35,11 @@
 # The `db` credentials are deliberately empty/trust: this is a throwaway local
 # Postgres bound to localhost for development, never a deployed one. To avoid a
 # port clash with a database already on the host, set POSTGRES_PORT.
-name: distributed-task-queue
+# Project name prefixes every resource this stack creates (containers, the
+# default network, the pgdata volume). Parameterized so a SECOND checkout of
+# this repo on the same machine can set PROJECT_NAME in its own .env and get
+# isolated resources instead of colliding with the first checkout.
+name: ${PROJECT_NAME:-distributed-task-queue}
 
 # The dev image is shared by two services: `dev` (the air sandbox + shell) and
 # `frontend` (the Vite dev server). Defined once here so their build args cannot
@@ -126,7 +130,7 @@ services:
   # --- development stack (profile: dev) ----------------------------------------
   dev:
     build: *dev-image
-    image: distributed-task-queue-dev
+    image: ${DEV_IMAGE:-distributed-task-queue-dev}
     profiles: ["dev"]
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     extra_hosts:
@@ -164,7 +168,7 @@ services:
   # and the spec-driven Workbench work on the Vite origin.
   frontend:
     build: *dev-image
-    image: distributed-task-queue-dev
+    image: ${DEV_IMAGE:-distributed-task-queue-dev}
     profiles: ["dev"]
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     command: ["./scripts/frontend-dev.sh"]

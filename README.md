@@ -59,6 +59,12 @@ compose-interpolated variables with conflict-free values
 automatically and the Makefile / `scripts/demo.sh` honor it when printing URLs
 or seeding jobs.
 
+Running two checkouts of this repo on one machine? Give each its own
+`PROJECT_NAME` (commented in the template) — it prefixes every Docker resource
+(containers, network, Postgres volume), so a second checkout with its own name
+gets isolated resources instead of container-name conflicts and a shared
+database. `DEV_IMAGE` does the same for the local dev image tag.
+
 ### Development (edit code, fast reload)
 
 The dev stack runs the API through `air` (fast reload), a worker so enqueued jobs
