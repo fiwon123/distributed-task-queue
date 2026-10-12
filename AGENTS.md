@@ -71,7 +71,7 @@ distributed-task-queue/
 ├── go.mod / go.sum          # single root Go module (backend + frontend + docs embeds)
 ├── scripts/                 # dev-sandbox helper scripts (entrypoint, token resolution, …)
 ├── Dockerfile               # dev sandbox image (Go + gh + air fast reload)
-├── docker-compose.yml       # dev sandbox + local Postgres (`dev` + `db` services)
+├── docker-compose.yml       # dev stack + local Postgres (`dev` + `frontend` + `db` services)
 ├── mise.toml                # toolchain pins (go, gh) — host + dev image
 ├── .air.toml                # air fast-reload config (runs ./backend/cmd/api)
 ├── Makefile
@@ -113,20 +113,27 @@ performs. Add new checks to the `Makefile`.
 ### Dev sandbox
 
 The docker compose `dev` service is the development environment (gh + opencode
-pre-configured, `air` fast reload, no docker socket); a `db` service runs
-PostgreSQL for local development. Host-only tools are bootstrapped with
-`./scripts/setup-host-tools.sh` (installs mise, authenticates gh). Key targets:
+pre-configured, `air` fast reload, no docker socket) and the `frontend` service
+runs the Vite dev server next to it (hot reload for the dashboard); a `db`
+service runs PostgreSQL for local development. Host-only tools are bootstrapped
+with `./scripts/setup-host-tools.sh` (installs mise, authenticates gh). Key
+targets:
 
 ```bash
-make dev-up        # build + start the dev stack: db + sandbox + worker (needs docker on the host)
+make dev-up        # build + start the dev stack: db + sandbox + worker + Vite console (needs docker on the host)
 make dev-restart   # restart the dev container after Dockerfile/deps changes
 make dev-shell     # shell inside the container (alias: make shell)
 make dev-opencode  # run opencode inside the container (alias: make opencode)
-make dev-log       # follow sandbox + worker logs
-make dev-down      # stop and remove the dev stack (db + sandbox + worker)
+make dev-log       # follow sandbox + worker + frontend logs
+make dev-down      # stop and remove the dev stack (db + sandbox + worker + frontend)
 make prod-up       # build + start the production stack: db + api + worker (runtime image)
 make prod-down     # stop and remove the production stack
 ```
+
+`make dev-up` serves the Vite console on host `${FRONTEND_PORT:-5173}` (it proxies
+`/v1`, `/openapi`, `/docs`, `/swagger` to the air API — see
+`frontend/vite.config.ts`) and the air-reloaded API on `${HOST_PORT:-8081}` with
+the Swagger UI at `/docs`.
 
 The two stacks select their services via compose profiles (`dev` / `prod`) and
 share one `db` service, so run one at a time. `make dev-up` forwards
@@ -197,7 +204,7 @@ host, `./scripts/setup-host-tools.sh` bootstraps mise + gh.
 
 - **Assignee**: `fiwon123` — `workflow.md` tells agents to read `ASSIGNEE` from here before assigning issues and PRs
 - **GitHub credentials**: `GH_TOKEN` or `GITHUB_TOKEN` — either name works. Do not set either here: values belong in the host environment, and the dev sandbox forwards whichever is valid at runtime.
-- **Dev sandbox**: docker compose `dev` + `db` services (gh + opencode pre-configured, no docker socket); `make dev-up` / `dev-restart` / `dev-shell` / `dev-opencode` / `dev-down`. A separate `prod` profile/stack (`make prod-up` / `prod-down`) runs the runtime `api` + `worker`; the two share one `db`, so run one at a time
+- **Dev sandbox**: docker compose `dev` + `frontend` + `db` services (gh + opencode pre-configured, no docker socket); `make dev-up` / `dev-restart` / `dev-shell` / `dev-opencode` / `dev-down`. A separate `prod` profile/stack (`make prod-up` / `prod-down`) runs the runtime `api` + `worker`; the two share one `db`, so run one at a time
 - **Model assignments**: an example, not a recommendation — `opencode.json` assigns `opencode/big-pickle` to `build` and `opencode/mimo-v2.6-flash-free` to `plan`. Change them to whatever your install offers; no prompt depends on which model an agent runs. Verify an id with `opencode models` first.
 - Linting / formatting: `gofmt` for all Go code; `go vet` for static analysis
 - Testing: the standard `testing` package (`go test ./...`); Postgres integration tests are gated behind a build tag so unit tests need no services

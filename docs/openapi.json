@@ -509,8 +509,8 @@
   },
   "servers": [
     {
-      "description": "Local stack (docker compose / make stack-up)",
-      "url": "http://localhost:8080"
+      "description": "Same origin as this page",
+      "url": "/"
     }
   ],
   "tags": [

@@ -54,18 +54,28 @@ Follow the worker as it processes the demo jobs with `make prod-logs`. Set
 
 ### Development (edit code, fast reload)
 
-The dev sandbox runs the API through `air` (fast reload) and adds a worker, so
-enqueued jobs actually get processed while you edit:
+The dev stack runs the API through `air` (fast reload), a worker so enqueued jobs
+actually get processed, and a **Vite dev server** for the dashboard:
 
 ```bash
-make dev-up       # db + dev sandbox + worker (compose profile: dev)
+make dev-up       # db + dev sandbox + worker + Vite (compose profile: dev)
 API_URL=http://localhost:8081 make demo   # sandbox API listens on HOST_PORT (:8081)
 ```
 
-The sandbox API is on <http://localhost:8081/> (override with `HOST_PORT`). For a
-shell inside the sandbox use `make shell`; to run opencode use `make opencode`.
-The API hot-reloads on Go changes; the worker is a built image, so it picks up
-worker changes on the next `make dev-up`.
+Then open:
+
+- **Console (Vite, hot reload)** — <http://localhost:5173/> (override with `FRONTEND_PORT`)
+- **Dev API (air)** — <http://localhost:8081/> (override with `HOST_PORT`)
+- **API docs** — <http://localhost:8081/docs>
+
+Both sides hot-reload: editing `frontend/src` updates the browser via HMR, and
+editing a Go handler rebuilds through `air`. Vite proxies `/v1`, `/openapi`,
+`/docs`, and `/swagger` to the dev API, so the console's `/workbench` loads the
+served spec on the Vite origin. The worker is a built image, so it picks up worker
+changes on the next `make dev-up`.
+
+For a shell inside the sandbox use `make shell`; to run opencode use
+`make opencode`; follow the Vite/API/worker logs with `make dev-log`.
 
 `make demo` needs `curl` on the host and is safe to run repeatedly. Because each
 stack is behind its own profile, `make prod-up` never starts the dev sandbox (and
