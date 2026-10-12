@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { DOCS_PATH, REPO_URL } from "./links";
 import type { Job, QueueInfo, Stats } from "./types";
 
 // jsonResponse returns a fetch-shaped stub, avoiding any dependency on a global
@@ -69,8 +70,10 @@ function installFetch(): Call[] {
 }
 
 beforeEach(() => {
-  // Each test starts at the console route.
+  // Each test starts at the console route with a clean theme.
   window.history.pushState({}, "", "/");
+  document.documentElement.dataset.theme = "dark";
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -130,5 +133,65 @@ describe("App", () => {
     const detail = await screen.findByRole("region", { name: "job detail" });
     expect(within(detail).getByText("email")).toBeInTheDocument();
     expect(within(detail).getByText("kaboom")).toBeInTheDocument();
+  });
+});
+
+describe("console chrome", () => {
+  it("renders the brand as the page heading", async () => {
+    installFetch();
+    render(<App />);
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent(/distributed/);
+  });
+
+  it("links to GitHub from the header and footer", async () => {
+    installFetch();
+    render(<App />);
+
+    const links = screen.getAllByRole("link", { name: /GitHub/ });
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", REPO_URL);
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noreferrer");
+    }
+  });
+
+  it("links to the API docs from the footer", async () => {
+    installFetch();
+    render(<App />);
+
+    const contentinfo = screen.getByRole("contentinfo");
+    expect(within(contentinfo).getByRole("link", { name: "API docs" })).toHaveAttribute(
+      "href",
+      DOCS_PATH,
+    );
+  });
+
+  it("toggles the theme and persists the choice", async () => {
+    installFetch();
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    const toggle = screen.getByTestId("theme-toggle");
+    expect(toggle).toHaveAccessibleName("Switch to light theme");
+
+    await user.click(toggle);
+
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(localStorage.getItem("dtq-theme")).toBe("light");
+    expect(toggle).toHaveAccessibleName("Switch to dark theme");
+  });
+
+  it("renders the about page and marks its nav item current", async () => {
+    window.history.pushState({}, "", "/about");
+    installFetch();
+    render(<App />);
+
+    expect(await screen.findByRole("region", { name: "about" })).toBeInTheDocument();
+    expect(screen.getByText("How it works")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("aria-current", "page");
   });
 });

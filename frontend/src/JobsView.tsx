@@ -121,6 +121,7 @@ export default function JobsView() {
         </button>
         <button
           type="button"
+          className="primary"
           aria-expanded={showEnqueue}
           onClick={() => setShowEnqueue((shown) => !shown)}
         >
@@ -156,7 +157,10 @@ export default function JobsView() {
           Jobs <span className="muted">({jobs.length})</span>
         </h2>
         {jobs.length === 0 ? (
-          <p className="muted">No jobs match this filter.</p>
+          <div className="empty-state">
+            <p>No jobs match this filter.</p>
+            <p className="muted">Use New job to enqueue one, then refresh.</p>
+          </div>
         ) : (
           <table>
             <thead>
