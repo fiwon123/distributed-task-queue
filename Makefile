@@ -98,6 +98,22 @@ frontend-check:
 
 # --- Dev sandbox (docker compose) ----------------------------------------------
 
+# Pull the host-port overrides from a repo-root .env (the same file docker
+# compose reads for its ${VAR} substitution) so the URLs `dev-up` / `prod-up`
+# print agree with the ports the stack actually binds after
+# `cp .env.example .env`. `?=` keeps the shell environment / command line
+# authoritative — matching docker-compose's own precedence (shell env > .env) —
+# and the ${VAR:-default} fallbacks still apply when .env is absent or the
+# variable is not defined there. Values may carry trailing # comments / quotes
+# (as compose tolerates); only HOST_UID/HOST_GID/HOME are never read this way
+# (they are auto-derived or intentionally not overridable via .env).
+ENV_VAL = $(shell sed -n 's/^$1=//p' .env 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*#.*$$//; s/^"//; s/"$$//' | tail -1)
+FRONTEND_PORT ?= $(call ENV_VAL,FRONTEND_PORT)
+HOST_PORT ?= $(call ENV_VAL,HOST_PORT)
+API_PORT ?= $(call ENV_VAL,API_PORT)
+POSTGRES_PORT ?= $(call ENV_VAL,POSTGRES_PORT)
+export FRONTEND_PORT HOST_PORT API_PORT POSTGRES_PORT
+
 preflight: ## Check host prerequisites for the dev sandbox
 	@test -x "$(HOME)/.opencode/bin/opencode" || { echo "ERROR: opencode not found at ~/.opencode/bin/opencode" >&2; exit 1; }
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
