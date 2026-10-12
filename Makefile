@@ -8,7 +8,7 @@ GO ?= go
 NODE ?= node
 NPM ?= npm
 
-.PHONY: help check fmt vet test build run run-worker clean \
+.PHONY: help check fmt vet test build run run-worker openapi-json clean \
         frontend-install frontend-deps frontend-build frontend-test frontend-lint frontend-check \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
         shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
@@ -51,6 +51,10 @@ test:
 build:
 	@echo "==> go build"
 	$(GO) build ./...
+
+## openapi-json: regenerate docs/openapi.json from docs/openapi.yaml (commit the result)
+openapi-json:
+	$(GO) run ./docs/generate
 
 run:
 	$(GO) run ./backend/cmd/api

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/fs"
 	"net/http"
@@ -242,13 +243,86 @@ func TestOpenAPIDocsServed(t *testing.T) {
 	if !strings.Contains(page.Body.String(), "SwaggerUIBundle") {
 		t.Errorf("GET /docs body does not reference Swagger UI:\n%s", page.Body.String())
 	}
+	if !strings.Contains(page.Body.String(), "/swagger/swagger-ui-bundle.js") {
+		t.Errorf("GET /docs does not reference the vendored Swagger UI bundle:\n%s", page.Body.String())
+	}
+	if strings.Contains(page.Body.String(), "unpkg.com") {
+		t.Errorf("GET /docs still references the unpkg CDN; the docs must work offline:\n%s", page.Body.String())
+	}
+}
+
+// TestOpenAPIJSONServed checks the generated JSON document is served correctly.
+func TestOpenAPIJSONServed(t *testing.T) {
+	handler := New(&fakeStore{}, discardLogger()).WithOpenAPI(docs.FS).Handler()
+
+	w := get(t, handler, "/openapi.json")
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /openapi.json = %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("GET /openapi.json Content-Type = %q, want application/json", ct)
+	}
+	var doc struct {
+		OpenAPI string         `json:"openapi"`
+		Paths   map[string]any `json:"paths"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("GET /openapi.json body is not valid JSON: %v", err)
+	}
+	if doc.OpenAPI == "" || len(doc.Paths) == 0 {
+		t.Errorf("GET /openapi.json is missing openapi/paths: %s", w.Body.String())
+	}
+}
+
+// TestOpenAPIJSONMatchesYAML fails when docs/openapi.json drifts from
+// docs/openapi.yaml; regenerate with `make openapi-json` and commit the result.
+func TestOpenAPIJSONMatchesYAML(t *testing.T) {
+	doc := loadSpec(t)
+
+	want, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal spec: %v", err)
+	}
+	want = append(want, '\n')
+
+	got, err := fs.ReadFile(docs.FS, "openapi.json")
+	if err != nil {
+		t.Fatalf("read embedded openapi.json: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("docs/openapi.json is stale relative to docs/openapi.yaml; run `make openapi-json` and commit the result")
+	}
+}
+
+// TestOpenAPISwaggerAssetsServed checks the vendored Swagger UI assets are
+// reachable at /swagger/, so the docs page loads with no CDN.
+func TestOpenAPISwaggerAssetsServed(t *testing.T) {
+	handler := New(&fakeStore{}, discardLogger()).WithOpenAPI(docs.FS).Handler()
+
+	cases := []struct {
+		target string
+		prefix string
+	}{
+		{"/swagger/swagger-ui.css", "text/css"},
+		{"/swagger/swagger-ui-bundle.js", "javascript"},
+	}
+	for _, tc := range cases {
+		w := get(t, handler, tc.target)
+		if w.Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", tc.target, w.Code)
+			continue
+		}
+		if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, tc.prefix) {
+			t.Errorf("GET %s Content-Type = %q, want to contain %q", tc.target, ct, tc.prefix)
+		}
+	}
 }
 
 // TestOpenAPIDisabledByDefault pins that the infrastructure routes only exist
 // when WithOpenAPI is called.
 func TestOpenAPIDisabledByDefault(t *testing.T) {
 	handler := New(&fakeStore{}, discardLogger()).Handler()
-	for _, target := range []string{"/openapi.yaml", "/docs"} {
+	for _, target := range []string{"/openapi.yaml", "/openapi.json", "/docs", "/swagger/swagger-ui.css"} {
 		if w := get(t, handler, target); w.Code != http.StatusNotFound {
 			t.Errorf("GET %s without WithOpenAPI = %d, want 404", target, w.Code)
 		}
@@ -273,6 +347,9 @@ func TestOpenAPIDoesNotShadowDashboard(t *testing.T) {
 	}
 	if w := get(t, handler, "/openapi.yaml"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "openapi:") {
 		t.Errorf("GET /openapi.yaml with dashboard mounted = %d; want the spec, not the SPA", w.Code)
+	}
+	if w := get(t, handler, "/openapi.json"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "openapi") {
+		t.Errorf("GET /openapi.json with dashboard mounted = %d; want the spec, not the SPA", w.Code)
 	}
 	// A client-side route still falls back to the SPA.
 	if w := get(t, handler, "/queues/default"); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "id=root") {
