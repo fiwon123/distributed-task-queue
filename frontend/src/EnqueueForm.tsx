@@ -127,7 +127,7 @@ export default function EnqueueForm({
           {validationError}
         </p>
       )}
-      <button type="submit" disabled={busy}>
+      <button type="submit" className="primary" disabled={busy}>
         {busy ? "Enqueuing…" : "Enqueue job"}
       </button>
     </form>

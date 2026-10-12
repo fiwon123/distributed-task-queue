@@ -3,7 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>distributed-task-queue</title>
+    <meta
+      name="description"
+      content="Console for distributed-task-queue — a durable, PostgreSQL-backed distributed task queue."
+    />
+    <meta name="theme-color" content="#0d0a17" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f4ff" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>distributed-task-queue · console</title>
+    <script>
+      // Stamp the resolved theme before first paint so there is no flash of the
+      // wrong palette. Keep THEME_STORAGE_KEY in sync with frontend/src/theme.ts.
+      (function () {
+        try {
+          var stored = localStorage.getItem("dtq-theme");
+          var light = window.matchMedia("(prefers-color-scheme: light)").matches;
+          document.documentElement.dataset.theme =
+            stored === "light" || stored === "dark" ? stored : light ? "light" : "dark";
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
