@@ -103,10 +103,12 @@ preflight: ## Check host prerequisites for the dev sandbox
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 	@scripts/resolve-gh-token.sh --check >/dev/null 2>&1 || true
 
-dev-up: preflight ## Build and start the development stack (db + dev sandbox + worker)
+dev-up: preflight ## Build and start the dev stack (db + sandbox + worker + Vite)
 	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d --build
 	@echo ""
+	@echo "  console (Vite): http://localhost:$${FRONTEND_PORT:-5173}/"
 	@echo "  dev API (air):  http://localhost:$${HOST_PORT:-8081}/"
+	@echo "  API docs:       http://localhost:$${HOST_PORT:-8081}/docs"
 	@echo "  seed jobs:      API_URL=http://localhost:$${HOST_PORT:-8081} make demo"
 	@echo "  logs:           make dev-log"
 	@echo ""
@@ -114,11 +116,11 @@ dev-up: preflight ## Build and start the development stack (db + dev sandbox + w
 dev-restart: preflight ## Restart the dev container after Dockerfile/deps changes
 	@docker compose --profile dev restart dev
 
-dev-down: ## Stop and remove the development stack (db + dev sandbox + worker)
+dev-down: ## Stop and remove the dev stack (db + sandbox + worker + frontend)
 	@docker compose --profile dev down
 
-dev-log: ## Follow dev sandbox + worker logs
-	@docker compose --profile dev logs -f dev worker
+dev-log: ## Follow dev sandbox + worker + frontend logs
+	@docker compose --profile dev logs -f dev worker frontend
 
 dev-build: preflight ## Rebuild the dev image without starting
 	@docker compose --profile dev build

@@ -22,8 +22,12 @@ info:
     name: Educational project — not production-ready
 
 servers:
-  - url: http://localhost:8080
-    description: Local stack (docker compose / make stack-up)
+  # Same-origin is deliberate: the API serves its own documentation, so Swagger
+  # UI's "Try it out" should call whichever host/port served the page (:8080 for
+  # the prod stack, :8081 for the dev sandbox, or the Vite dev proxy). A relative
+  # URL resolves against the page origin.
+  - url: /
+    description: Same origin as this page
 
 tags:
   - name: jobs

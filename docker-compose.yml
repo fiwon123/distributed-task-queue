@@ -1,16 +1,18 @@
 # Compose file for two independent stacks that share one Postgres (`db`):
 #
 #   development (profile: dev)  — `dev` sandbox (runs the API via air, fast
-#                                 reload, host :8081) plus a `worker`, so jobs
-#                                 flow while you edit code. `make dev-up`.
+#                                 reload, host :8081) + `frontend` (Vite dev
+#                                 server, host :5173) + a `worker`, so jobs flow
+#                                 while you edit code. `make dev-up`.
 #   production  (profile: prod) — `api` (runtime image, host :8080) plus a
 #                                 `worker`. The real end-to-end app. `make prod-up`.
 #
 # Services select their stack by profile:
-#   - `db`     — no profile; both stacks need it, and it is always started.
-#   - `dev`    — profile `dev` only.
-#   - `worker` — profiles `dev` AND `prod`; it runs in either stack.
-#   - `api`    — profile `prod` only.
+#   - `db`        — no profile; both stacks need it, and it is always started.
+#   - `dev`       — profile `dev` only.
+#   - `frontend`  — profile `dev` only; Vite dev server for the dashboard.
+#   - `worker`    — profiles `dev` AND `prod`; it runs in either stack.
+#   - `api`       — profile `prod` only.
 #
 # `docker compose up` with no profile now starts only `db`, because every app
 # service is gated behind a profile. Use the Makefile targets (or pass
@@ -34,6 +36,17 @@
 # Postgres bound to localhost for development, never a deployed one. To avoid a
 # port clash with a database already on the host, set POSTGRES_PORT.
 name: distributed-task-queue
+
+# The dev image is shared by two services: `dev` (the air sandbox + shell) and
+# `frontend` (the Vite dev server). Defined once here so their build args cannot
+# drift; both reference it with `build: *dev-image` and the same `image:` tag.
+x-dev-image: &dev-image
+  context: .
+  dockerfile: Dockerfile
+  target: dev
+  args:
+    HOST_UID: ${HOST_UID:-1000}
+    HOST_GID: ${HOST_GID:-1000}
 
 services:
   db:
@@ -112,13 +125,8 @@ services:
 
   # --- development stack (profile: dev) ----------------------------------------
   dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: dev
-      args:
-        HOST_UID: ${HOST_UID:-1000}
-        HOST_GID: ${HOST_GID:-1000}
+    build: *dev-image
+    image: distributed-task-queue-dev
     profiles: ["dev"]
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     extra_hosts:
@@ -149,6 +157,33 @@ services:
       - ${HOST_HOME:-${HOME}}/.opencode/bin/opencode:/usr/local/bin/opencode:ro
       - ${HOST_HOME:-${HOME}}/.config/opencode:/home/devuser/.config/opencode:ro
       - ${HOST_HOME:-${HOME}}/.gitconfig:/home/devuser/.gitconfig:ro
+
+  # Vite dev server for the dashboard (profile: dev). Runs alongside the
+  # air-reloaded API so `make dev-up` hot-reloads both the frontend (HMR) and the
+  # backend. It proxies the API paths (see frontend/vite.config.ts), so the console
+  # and the spec-driven Workbench work on the Vite origin.
+  frontend:
+    build: *dev-image
+    image: distributed-task-queue-dev
+    profiles: ["dev"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    command: ["./scripts/frontend-dev.sh"]
+    # Start after the API container so logs interleave sensibly. Vite serves
+    # immediately and proxies to the API once air has it listening.
+    depends_on:
+      - dev
+    ports:
+      # Vite dev server. Override FRONTEND_PORT if 5173 is taken on the host.
+      - "${FRONTEND_PORT:-5173}:5173"
+    environment:
+      # Vite runs in this container, so it reaches the air API by service name.
+      - API_PROXY=http://dev:8080
+      - HOME=/home/devuser
+      # Keep the npm cache on the shared (gitignored) workspace so recreating the
+      # container does not re-download every dependency.
+      - npm_config_cache=/workspace/.xdg-cache/npm
+    volumes:
+      - .:/workspace:cached
 
 volumes:
   pgdata:
