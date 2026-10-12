@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { listJobs, listQueues, queueStats, requeueJob } from "./api";
 import EnqueueForm from "./EnqueueForm";
 import { STATUSES, errorMessage, isRequeueable, jobSummary, shortID } from "./format";
+import QueueComposition from "./QueueComposition";
 import { AppLink } from "./router";
+import Toast from "./Toast";
 import type { Job, QueueInfo, Stats, Status } from "./types";
 
 // JobsView is the console: a queue/status filter over the job list, per-queue
@@ -88,6 +90,8 @@ export default function JobsView() {
     await Promise.all([loadQueues(), loadQueue()]);
   }
 
+  const dismissNotice = useCallback(() => setNotice(null), []);
+
   return (
     <>
       <div className="controls">
@@ -134,11 +138,7 @@ export default function JobsView() {
           {error}
         </p>
       )}
-      {notice && (
-        <p className="banner notice" role="status">
-          {notice}
-        </p>
-      )}
+      {notice && <Toast message={notice} onDismiss={dismissNotice} />}
 
       {showEnqueue && <EnqueueForm onEnqueued={onEnqueued} onError={setError} />}
 
@@ -150,6 +150,7 @@ export default function JobsView() {
               <span className="card-label">{s}</span>
             </div>
           ))}
+        {stats && <QueueComposition counts={stats.counts} />}
       </section>
 
       <section aria-label="jobs">

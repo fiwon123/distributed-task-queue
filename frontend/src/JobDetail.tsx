@@ -3,6 +3,7 @@ import { requeueJob } from "./api";
 import CopyButton from "./CopyButton";
 import { errorMessage, isRequeueable, isTerminal, prettyJSON, shortID } from "./format";
 import { AppLink } from "./router";
+import Skeleton from "./Skeleton";
 import type { Job } from "./types";
 import { useJobPolling } from "./useJobPolling";
 
@@ -31,7 +32,7 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
   const payloadText = job !== null ? prettyJSON(job.payload) : "";
 
   return (
-    <section aria-label="job detail">
+    <section aria-label="job detail" aria-busy={loading}>
       <p>
         <AppLink to="/">← All jobs</AppLink>
       </p>
@@ -40,7 +41,7 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
           {banner}
         </p>
       )}
-      {loading && job === null && <p className="muted">Loading…</p>}
+      {loading && job === null && <Skeleton lines={6} />}
       {job !== null && (
         <>
           <h2>

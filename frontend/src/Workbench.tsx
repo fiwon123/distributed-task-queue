@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getOpenAPI } from "./api";
 import { errorMessage, prettyJSON } from "./format";
 import { parseOperations, type Operation } from "./openapi";
+import Skeleton from "./Skeleton";
 
 interface ResponseView {
   status: number;
@@ -149,7 +150,7 @@ export default function Workbench() {
             {specError}
           </p>
         )}
-        {operations === null && !specError && <p className="muted">Loading…</p>}
+        {operations === null && !specError && <Skeleton lines={4} />}
         {operations?.length === 0 && <p className="muted">The spec has no operations.</p>}
         {groups.map(([tag, ops]) => (
           <div key={tag}>
