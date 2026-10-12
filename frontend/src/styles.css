@@ -45,7 +45,6 @@
   --dead: #fb7185;
   --dead-bg: rgba(251, 113, 133, 0.15);
 
-  --notice-bg: rgba(110, 231, 168, 0.12);
   --notice-border: #2c6b45;
   --error-bg: rgba(251, 113, 133, 0.14);
   --error-border: #7f2333;
@@ -87,7 +86,6 @@
   --dead: #be123c;
   --dead-bg: rgba(190, 18, 60, 0.11);
 
-  --notice-bg: rgba(4, 120, 87, 0.1);
   --notice-border: #7fc9ac;
   --error-bg: rgba(190, 18, 60, 0.09);
   --error-border: #e5a2b3;
@@ -95,6 +93,23 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 html {
@@ -179,6 +194,22 @@ a {
 .logo {
   display: block;
   flex: none;
+}
+
+/* A slow amber halo behind the brand mark; the reduced-motion block below
+ * collapses the animation, leaving the quiet resting state. */
+.brand .logo {
+  animation: logo-glow 7s ease-in-out infinite;
+}
+
+@keyframes logo-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(251, 191, 36, 0));
+  }
+  50% {
+    filter: drop-shadow(0 2px 9px rgba(251, 191, 36, 0.5));
+  }
 }
 
 .site-nav {
@@ -382,9 +413,92 @@ button.primary:hover:not(:disabled) {
   border-color: var(--error-border);
 }
 
-.banner.notice {
-  background: var(--notice-bg);
-  border-color: var(--notice-border);
+/* --- Toast -------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(30rem, calc(100vw - 2.5rem));
+  padding: 0.6rem 0.65rem 0.6rem 0.9rem;
+  border: 1px solid var(--notice-border);
+  border-radius: 10px;
+  background: var(--surface-3);
+  box-shadow: var(--shadow);
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast-message {
+  min-width: 0;
+}
+
+.toast-close {
+  flex: none;
+  padding: 0.05rem 0.4rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.toast-close:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Skeletons ---------------------------------------------------------- */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+
+.skeleton-line {
+  height: 0.85rem;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-line:nth-child(even) {
+  width: 70%;
+}
+
+.skeleton-line:last-child {
+  width: 45%;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 /* --- Stats cards -------------------------------------------------------- */
@@ -444,6 +558,50 @@ button.primary:hover:not(:disabled) {
   font-size: 0.7rem;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+/* --- Queue composition -------------------------------------------------- */
+
+.composition {
+  flex-basis: 100%;
+  margin-top: 0.25rem;
+}
+
+.composition-bar {
+  display: flex;
+  height: 0.7rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.composition-segment {
+  background: var(--status-color, var(--border-strong));
+}
+
+.composition-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.composition-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.composition-swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 3px;
+  background: var(--status-color, var(--border-strong));
 }
 
 /* --- Tables ------------------------------------------------------------- */
