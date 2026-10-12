@@ -560,6 +560,12 @@ button.primary:hover:not(:disabled) {
   color: var(--muted);
 }
 
+/* Bulk action living in the stats row; sits at the end of a wrapped line. */
+.stats-action {
+  align-self: center;
+  margin-left: auto;
+}
+
 /* --- Queue composition -------------------------------------------------- */
 
 .composition {

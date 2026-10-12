@@ -43,6 +43,17 @@ export function requeueJob(id: string): Promise<Job> {
   return getJSON(`/v1/jobs/${encodeURIComponent(id)}/requeue`, { method: "POST" });
 }
 
+export interface RequeueDeadResult {
+  queue: string;
+  requeued: number;
+}
+
+// requeueDeadJobs returns every dead-lettered job in a queue to pending and
+// reports how many it revived (0 when there were none).
+export function requeueDeadJobs(queue: string): Promise<RequeueDeadResult> {
+  return getJSON(`/v1/queues/${encodeURIComponent(queue)}/requeue-dead`, { method: "POST" });
+}
+
 export function getJob(id: string): Promise<Job> {
   return getJSON(`/v1/jobs/${encodeURIComponent(id)}`);
 }

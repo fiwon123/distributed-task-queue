@@ -199,6 +199,15 @@ func TestOpenAPIResponsesValidateSpec(t *testing.T) {
 			name: "queue stats empty name", method: http.MethodGet, target: "/v1/queues/%20/stats",
 			store: &fakeStore{}, want: http.StatusBadRequest, pathKey: "/v1/queues/{name}/stats",
 		},
+		{
+			name: "requeue dead", method: http.MethodPost, target: "/v1/queues/default/requeue-dead",
+			store: &fakeStore{requeueDeadCount: 2},
+			want:  http.StatusOK, pathKey: "/v1/queues/{name}/requeue-dead",
+		},
+		{
+			name: "requeue dead empty name", method: http.MethodPost, target: "/v1/queues/%20/requeue-dead",
+			store: &fakeStore{}, want: http.StatusBadRequest, pathKey: "/v1/queues/{name}/requeue-dead",
+		},
 	}
 
 	for _, tc := range cases {

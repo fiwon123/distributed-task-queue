@@ -143,6 +143,98 @@ func TestRequeueRejectsNonRequeueable(t *testing.T) {
 	}
 }
 
+// TestRequeueDeadBulk checks that bulk requeue revives every dead-lettered job
+// in a queue, leaves other jobs alone, and is idempotent.
+func TestRequeueDeadBulk(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	maxAttempts := 1
+	// Two jobs that exhaust their single attempt and become dead.
+	deadIDs := make([]string, 0, 2)
+	for i := 0; i < 2; i++ {
+		job, err := store.Enqueue(ctx, EnqueueParams{Type: "noop", Queue: q, MaxAttempts: &maxAttempts})
+		if err != nil {
+			t.Fatalf("enqueue: %v", err)
+		}
+		claimed := claimOne(t, store, q, time.Minute)
+		if claimed.ID != job.ID {
+			t.Fatalf("claimed %s, want %s", claimed.ID, job.ID)
+		}
+		dead, err := store.Fail(ctx, FailParams{
+			ID: claimed.ID, Cause: "boom", RetryAt: time.Now(), Fence: *claimed.LockedUntil,
+		})
+		if err != nil {
+			t.Fatalf("fail: %v", err)
+		}
+		if dead.Status != StatusDead {
+			t.Fatalf("status = %q, want %q", dead.Status, StatusDead)
+		}
+		deadIDs = append(deadIDs, job.ID)
+	}
+	// A pending job that bulk requeue must leave untouched.
+	pending, err := store.Enqueue(ctx, EnqueueParams{Type: "noop", Queue: q})
+	if err != nil {
+		t.Fatalf("enqueue pending: %v", err)
+	}
+
+	n, err := store.RequeueDead(ctx, q)
+	if err != nil {
+		t.Fatalf("requeue dead: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("requeued = %d, want 2", n)
+	}
+
+	for _, id := range deadIDs {
+		got, err := store.Get(ctx, id)
+		if err != nil {
+			t.Fatalf("get %s: %v", id, err)
+		}
+		if got.Status != StatusPending || got.Attempts != 0 || got.LockedUntil != nil || got.LastError != nil {
+			t.Errorf("revived %s = %+v, want pending/attempts=0/no lease/no error", id, got)
+		}
+	}
+
+	got, err := store.Get(ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("get pending: %v", err)
+	}
+	if got.Status != StatusPending || got.Attempts != 0 {
+		t.Errorf("pending job = %+v, want untouched pending/attempts=0", got)
+	}
+
+	// Idempotent: no dead jobs remain, so a second call revives nothing.
+	again, err := store.RequeueDead(ctx, q)
+	if err != nil {
+		t.Fatalf("requeue dead again: %v", err)
+	}
+	if again != 0 {
+		t.Errorf("second requeue dead = %d, want 0", again)
+	}
+}
+
+// TestRequeueDeadUnknownQueueRevivesNothing verifies a queue with no dead jobs
+// reports 0 rather than an error.
+func TestRequeueDeadUnknownQueueRevivesNothing(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t) + "_empty"
+	defer cleanupQueue(t, pool, q)
+
+	n, err := store.RequeueDead(ctx, q)
+	if err != nil {
+		t.Fatalf("requeue dead: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("requeued = %d, want 0", n)
+	}
+}
+
 // TestQueueStatsCountsByStatus checks the per-status census includes a job in
 // each state and zero-fills the rest.
 func TestQueueStatsCountsByStatus(t *testing.T) {

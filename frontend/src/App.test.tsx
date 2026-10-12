@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import type { RequeueDeadResult } from "./api";
 import { DOCS_PATH, REPO_URL } from "./links";
 import type { Job, QueueInfo, Stats } from "./types";
 
@@ -57,6 +58,8 @@ function installFetch(): Call[] {
       const url = typeof input === "string" ? input : input.toString();
       const method = init?.method ?? "GET";
       calls.push({ url, method });
+      if (url.endsWith("/requeue-dead"))
+        return jsonResponse({ queue: "critical", requeued: 1 } satisfies RequeueDeadResult);
       if (url.includes("/requeue")) return jsonResponse({ ...deadJob, status: "pending" });
       if (url.endsWith("/v1/queues")) return jsonResponse({ queues });
       if (url.endsWith("/stats")) return jsonResponse(stats);
@@ -113,6 +116,38 @@ describe("App", () => {
       expect(calls.some((c) => c.method === "POST" && c.url.includes("/requeue"))).toBe(true);
     });
     expect(await screen.findByRole("status")).toHaveTextContent(/Requeued/);
+  });
+
+  it("bulk-requeues every dead job for the selected queue", async () => {
+    const calls = installFetch();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("table");
+    await user.click(await screen.findByRole("button", { name: "Requeue all dead" }));
+
+    await waitFor(() => {
+      expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/requeue-dead"))).toBe(true);
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent("Requeued 1 dead job");
+  });
+
+  it("offers no bulk requeue when the queue has no dead jobs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/v1/queues")) return jsonResponse({ queues });
+        if (url.endsWith("/stats"))
+          return jsonResponse({ ...stats, counts: { ...stats.counts, dead: 0 } });
+        if (url.startsWith("/v1/jobs")) return jsonResponse({ jobs: [completedJob], count: 1 });
+        return jsonResponse({ error: "not found" }, 404);
+      }),
+    );
+    render(<App />);
+
+    await screen.findByRole("table");
+    expect(screen.queryByRole("button", { name: "Requeue all dead" })).not.toBeInTheDocument();
   });
 
   it("shows an error banner when the API fails", async () => {
