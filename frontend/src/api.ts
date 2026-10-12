@@ -1,3 +1,4 @@
+import type { Spec } from "./openapi";
 import type { EnqueueRequest, Job, QueueInfo, Stats, Status } from "./types";
 
 async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
@@ -52,4 +53,9 @@ export function enqueueJob(req: EnqueueRequest): Promise<Job> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
   });
+}
+
+// getOpenAPI fetches the served spec (a generated artifact; see docs/generate).
+export function getOpenAPI(): Promise<Spec> {
+  return getJSON("/openapi.json");
 }
