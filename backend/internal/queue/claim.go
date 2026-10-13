@@ -153,6 +153,34 @@ func (s *Store) Fail(ctx context.Context, p FailParams) (Job, error) {
 	return s.fencedUpdate(ctx, failSQL, p.ID, p.Fence, p.RetryAt, p.Cause)
 }
 
+const extendLeaseSQL = `
+UPDATE jobs
+SET locked_until = now() + make_interval(secs => $3::double precision)
+WHERE id = $1 AND status = 'running' AND locked_until = $2
+RETURNING locked_until`
+
+// ExtendLease renews the lease on a running job the caller still holds, so a
+// handler that outlives its original lease is not reclaimed while it is still
+// running. fence is the locked_until the worker last saw; the update only
+// applies while the worker still holds the lease, and the returned value is the
+// new fence the worker must use for its terminal Complete/Fail. When the lease
+// lapsed and another worker reclaimed the job, ErrLeaseLost is returned.
+func (s *Store) ExtendLease(ctx context.Context, id string, fence time.Time, lease time.Duration) (time.Time, error) {
+	if lease <= 0 {
+		return time.Time{}, &ValidationError{Message: "lease must be positive"}
+	}
+
+	var newFence time.Time
+	err := s.pool.QueryRow(ctx, extendLeaseSQL, id, fence, lease.Seconds()).Scan(&newFence)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, ErrLeaseLost
+		}
+		return time.Time{}, fmt.Errorf("extend lease: %w", err)
+	}
+	return newFence, nil
+}
+
 // fencedUpdate runs an UPDATE ... RETURNING that is conditional on the caller
 // still holding the lease. A missing row means the lease was lost.
 func (s *Store) fencedUpdate(ctx context.Context, sql, id string, args ...any) (Job, error) {

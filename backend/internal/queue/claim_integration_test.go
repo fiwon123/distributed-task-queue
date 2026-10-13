@@ -116,6 +116,61 @@ func TestClaimConcurrentNoDoubleClaim(t *testing.T) {
 	}
 }
 
+// TestExtendLeaseKeepsJobHidden covers the heartbeat store call: renewing the
+// lease before it lapses keeps a job claimed past its original lease, the
+// renewed fence is what completes it, and renewal only works while the caller
+// still holds the lease.
+func TestExtendLeaseKeepsJobHidden(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	maxAttempts := 5
+	job, err := store.Enqueue(ctx, EnqueueParams{Type: "noop", Queue: q, MaxAttempts: &maxAttempts})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	claimed := claimOne(t, store, q, 100*time.Millisecond)
+	if claimed.ID != job.ID {
+		t.Fatalf("claimed %s, want %s", claimed.ID, job.ID)
+	}
+
+	// Renew with a generous lease before the original one lapses.
+	renewed, err := store.ExtendLease(ctx, claimed.ID, *claimed.LockedUntil, 30*time.Second)
+	if err != nil {
+		t.Fatalf("extend lease: %v", err)
+	}
+	if !renewed.After(*claimed.LockedUntil) {
+		t.Errorf("renewed lease %v not after original %v", renewed, *claimed.LockedUntil)
+	}
+
+	// Past the original lease but well within the renewed one: not claimable.
+	time.Sleep(250 * time.Millisecond)
+	jobs, err := store.Claim(ctx, ClaimParams{Queues: []string{q}, Lease: time.Minute, Limit: 1})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("renewed job was reclaimed, got %d jobs", len(jobs))
+	}
+
+	// The original fence is stale; the renewed fence completes the job.
+	if _, err := store.Complete(ctx, job.ID, *claimed.LockedUntil); !errors.Is(err, ErrLeaseLost) {
+		t.Errorf("complete with original fence = %v, want ErrLeaseLost", err)
+	}
+	if _, err := store.Complete(ctx, job.ID, renewed); err != nil {
+		t.Fatalf("complete with renewed fence: %v", err)
+	}
+
+	// Renewal only works while the job is running.
+	if _, err := store.ExtendLease(ctx, job.ID, renewed, time.Minute); !errors.Is(err, ErrLeaseLost) {
+		t.Errorf("extend after complete = %v, want ErrLeaseLost", err)
+	}
+}
+
 // TestClaimReclaimsExpiredLease covers a worker that dies mid-job: after its
 // lease expires the job is claimable again and the attempt is counted.
 func TestClaimReclaimsExpiredLease(t *testing.T) {
