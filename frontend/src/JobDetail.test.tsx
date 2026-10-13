@@ -39,14 +39,29 @@ describe("JobDetail", () => {
   it("shows the full record with a pretty-printed payload", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse(job({ status: "dead", last_error: "kaboom" }))),
+      vi.fn(async () =>
+        jsonResponse(job({ status: "dead", last_error: "kaboom", timeout_seconds: 30 })),
+      ),
     );
     render(<JobDetail id={base.id} pollIntervalMs={1000} />);
 
     const region = await screen.findByRole("region", { name: "job detail" });
     expect(within(region).getByText("kaboom")).toBeInTheDocument();
     expect(within(region).getByText(/1 \/ 3/)).toBeInTheDocument();
+    expect(within(region).getByText("30s")).toBeInTheDocument();
     expect(within(region).getByText(/"hello": "world"/)).toBeInTheDocument();
+  });
+
+  it("shows no timeout when the job has none", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(job({}))),
+    );
+    render(<JobDetail id={base.id} pollIntervalMs={1000} />);
+
+    const region = await screen.findByRole("region", { name: "job detail" });
+    const term = within(region).getByText("Timeout");
+    expect(term.nextElementSibling).toHaveTextContent("—");
   });
 
   it("polls a running job until it is terminal, then stops", async () => {

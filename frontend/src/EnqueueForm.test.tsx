@@ -58,6 +58,7 @@ describe("EnqueueForm", () => {
     fireEvent.change(screen.getByLabelText("Queue"), { target: { value: "critical" } });
     fireEvent.change(screen.getByLabelText("Payload (JSON)"), { target: { value: '{"n":1}' } });
     fireEvent.change(screen.getByLabelText("Max attempts"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Timeout (s)"), { target: { value: "30" } });
     await user.click(screen.getByRole("button", { name: "Enqueue job" }));
 
     await waitFor(() => expect(onEnqueued).toHaveBeenCalledWith(created));
@@ -69,6 +70,57 @@ describe("EnqueueForm", () => {
       payload: { n: 1 },
       queue: "critical",
       max_attempts: 5,
+      timeout_seconds: 30,
+    });
+  });
+
+  it("omits timeout_seconds when left blank", async () => {
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(input),
+          method: init?.method ?? "GET",
+          body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        });
+        return jsonResponse(created, 201);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Enqueue job" }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0].body).toEqual({ type: "echo", payload: {}, max_attempts: 3 });
+  });
+
+  it("sends timeout_seconds: 0, meaning no timeout", async () => {
+    const calls: Call[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(input),
+          method: init?.method ?? "GET",
+          body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        });
+        return jsonResponse(created, 201);
+      }),
+    );
+    const user = userEvent.setup();
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Timeout (s)"), { target: { value: "0" } });
+    await user.click(screen.getByRole("button", { name: "Enqueue job" }));
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0].body).toEqual({
+      type: "echo",
+      payload: {},
+      max_attempts: 3,
+      timeout_seconds: 0,
     });
   });
 

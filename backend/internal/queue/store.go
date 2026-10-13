@@ -56,14 +56,18 @@ func normalize(p EnqueueParams) (EnqueueParams, error) {
 		return EnqueueParams{}, &ValidationError{Message: "max_attempts must be at least 1"}
 	}
 
+	if p.TimeoutSeconds != nil && *p.TimeoutSeconds < 0 {
+		return EnqueueParams{}, &ValidationError{Message: "timeout_seconds must not be negative"}
+	}
+
 	return p, nil
 }
 
 const enqueueSQL = `
-INSERT INTO jobs (type, payload, queue, run_at, max_attempts)
-VALUES ($1, $2, $3, COALESCE($4, now()), $5)
+INSERT INTO jobs (type, payload, queue, run_at, max_attempts, timeout_seconds)
+VALUES ($1, $2, $3, COALESCE($4, now()), $5, $6)
 RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          run_at, locked_until, last_error, created_at, completed_at`
+          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
 
 // Enqueue inserts a new pending job and returns the stored row. A requested
 // run_at in the past is allowed; the job is immediately claimable.
@@ -73,13 +77,13 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams) (Job, error) {
 		return Job{}, err
 	}
 	row := s.pool.QueryRow(ctx, enqueueSQL,
-		p.Type, []byte(p.Payload), p.Queue, p.RunAt, *p.MaxAttempts)
+		p.Type, []byte(p.Payload), p.Queue, p.RunAt, *p.MaxAttempts, p.TimeoutSeconds)
 	return scanJob(row)
 }
 
 const getSQL = `
 SELECT id::text, type, payload, queue, status, attempts, max_attempts,
-       run_at, locked_until, last_error, created_at, completed_at
+       timeout_seconds, run_at, locked_until, last_error, created_at, completed_at
 FROM jobs
 WHERE id = $1`
 
@@ -102,8 +106,8 @@ func scanJob(row rowScanner) (Job, error) {
 	)
 	err := row.Scan(
 		&j.ID, &j.Type, &payload, &j.Queue, &status, &j.Attempts,
-		&j.MaxAttempts, &j.RunAt, &j.LockedUntil, &j.LastError,
-		&j.CreatedAt, &j.CompletedAt,
+		&j.MaxAttempts, &j.TimeoutSeconds, &j.RunAt, &j.LockedUntil,
+		&j.LastError, &j.CreatedAt, &j.CompletedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -126,7 +130,7 @@ SET status       = 'pending',
     completed_at = NULL
 WHERE id = $1 AND status IN ('dead', 'failed')
 RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          run_at, locked_until, last_error, created_at, completed_at`
+          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
 
 // Requeue returns a dead or failed job to the queue with a fresh retry budget:
 // status pending, attempts reset to 0, lease and error cleared, run_at now.

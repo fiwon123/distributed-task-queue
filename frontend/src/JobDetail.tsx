@@ -67,6 +67,12 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
             <dd>
               {job.attempts} / {job.max_attempts}
             </dd>
+            <dt>Timeout</dt>
+            <dd>
+              {job.timeout_seconds != null && job.timeout_seconds > 0
+                ? `${job.timeout_seconds}s`
+                : "—"}
+            </dd>
             <dt>Run at</dt>
             <dd className="mono">{job.run_at}</dd>
             <dt>Lease (locked until)</dt>

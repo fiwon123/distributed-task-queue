@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -219,6 +220,63 @@ func TestProcessJobWithoutLeaseIsIgnored(t *testing.T) {
 
 	if len(store.completeCalls) != 0 || len(store.failCalls) != 0 {
 		t.Errorf("store should not be called without a lease: complete=%d fail=%d",
+			len(store.completeCalls), len(store.failCalls))
+	}
+}
+
+// TestProcessTimeoutFailsAttempt verifies a job configured with timeout_seconds
+// runs under a deadline: a handler that outlives it is cancelled and the attempt
+// is failed with a message naming the timeout (rather than completing).
+func TestProcessTimeoutFailsAttempt(t *testing.T) {
+	store := &fakeStore{}
+	w := New(store, map[string]Handler{
+		"sleep": func(ctx context.Context, _ queue.Job) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	}, Config{Lease: 30 * time.Second}, discardLogger())
+
+	job := claimedJob("job-timeout", "sleep", 1)
+	timeout := 1
+	job.TimeoutSeconds = &timeout
+
+	start := time.Now()
+	w.process(context.Background(), 0, job)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("process took %v; the per-job timeout did not fire", elapsed)
+	}
+
+	if len(store.completeCalls) != 0 {
+		t.Fatalf("Complete calls = %d, want 0", len(store.completeCalls))
+	}
+	if len(store.failCalls) != 1 {
+		t.Fatalf("Fail calls = %d, want 1", len(store.failCalls))
+	}
+	if cause := store.failCalls[0].Cause; !strings.Contains(cause, "execution timed out after 1 seconds") {
+		t.Errorf("Fail cause = %q, want it to name the timeout", cause)
+	}
+}
+
+// TestProcessWithoutTimeoutIsNotDeadlineBound verifies that a job without
+// timeout_seconds is not cancelled by the worker: a short wait completes
+// normally, so the feature is opt-in per job.
+func TestProcessWithoutTimeoutIsNotDeadlineBound(t *testing.T) {
+	store := &fakeStore{}
+	w := New(store, map[string]Handler{
+		"work": func(ctx context.Context, _ queue.Job) error {
+			select {
+			case <-time.After(10 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	}, Config{}, discardLogger())
+
+	w.process(context.Background(), 0, claimedJob("job-notimeout", "work", 1))
+
+	if len(store.completeCalls) != 1 || len(store.failCalls) != 0 {
+		t.Errorf("complete=%d fail=%d, want the job to complete",
 			len(store.completeCalls), len(store.failCalls))
 	}
 }

@@ -76,6 +76,12 @@
             "format": "date-time",
             "type": "string"
           },
+          "timeout_seconds": {
+            "description": "Per-attempt execution timeout in seconds. Omit, `null`, or `0` for no timeout.\n",
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          },
           "type": {
             "description": "Handler name the worker dispatches on (e.g. `echo`).",
             "type": "string"
@@ -147,6 +153,13 @@
           },
           "status": {
             "$ref": "#/components/schemas/JobStatus"
+          },
+          "timeout_seconds": {
+            "description": "Per-attempt execution timeout in seconds. A handler that outlives it is cancelled and the attempt fails. `null` or `0` means no timeout.\n",
+            "example": 30,
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
           },
           "type": {
             "description": "Handler name the worker dispatches on.",

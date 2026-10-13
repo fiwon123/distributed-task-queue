@@ -303,6 +303,14 @@ components:
           type: integer
           description: Retry ceiling before the job is dead-lettered.
           example: 3
+        timeout_seconds:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: >
+            Per-attempt execution timeout in seconds. A handler that outlives it
+            is cancelled and the attempt fails. `null` or `0` means no timeout.
+          example: 30
         run_at:
           type: string
           format: date-time
@@ -346,6 +354,13 @@ components:
           minimum: 1
           default: 3
           description: Retry ceiling before dead-lettering.
+        timeout_seconds:
+          type: integer
+          nullable: true
+          minimum: 0
+          description: >
+            Per-attempt execution timeout in seconds. Omit, `null`, or `0` for no
+            timeout.
 
     JobList:
       type: object

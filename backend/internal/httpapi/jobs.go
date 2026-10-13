@@ -18,11 +18,12 @@ const maxBodyBytes = 1 << 20
 
 // enqueueRequest is the JSON body of POST /v1/jobs.
 type enqueueRequest struct {
-	Type        string          `json:"type"`
-	Payload     json.RawMessage `json:"payload"`
-	Queue       string          `json:"queue"`
-	RunAt       *time.Time      `json:"run_at"`
-	MaxAttempts *int            `json:"max_attempts"`
+	Type           string          `json:"type"`
+	Payload        json.RawMessage `json:"payload"`
+	Queue          string          `json:"queue"`
+	RunAt          *time.Time      `json:"run_at"`
+	MaxAttempts    *int            `json:"max_attempts"`
+	TimeoutSeconds *int            `json:"timeout_seconds"`
 }
 
 // handleEnqueue implements POST /v1/jobs.
@@ -40,11 +41,12 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job, err := s.store.Enqueue(r.Context(), queue.EnqueueParams{
-		Type:        req.Type,
-		Payload:     req.Payload,
-		Queue:       req.Queue,
-		RunAt:       req.RunAt,
-		MaxAttempts: req.MaxAttempts,
+		Type:           req.Type,
+		Payload:        req.Payload,
+		Queue:          req.Queue,
+		RunAt:          req.RunAt,
+		MaxAttempts:    req.MaxAttempts,
+		TimeoutSeconds: req.TimeoutSeconds,
 	})
 	if err != nil {
 		var invalid *queue.ValidationError

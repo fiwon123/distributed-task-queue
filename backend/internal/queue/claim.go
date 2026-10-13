@@ -76,8 +76,8 @@ SET status       = 'running',
 FROM due
 WHERE j.id = due.id
 RETURNING j.id::text, j.type, j.payload, j.queue, j.status, j.attempts,
-          j.max_attempts, j.run_at, j.locked_until, j.last_error,
-          j.created_at, j.completed_at`
+          j.max_attempts, j.timeout_seconds, j.run_at, j.locked_until,
+          j.last_error, j.created_at, j.completed_at`
 
 // Claim marks up to Limit due jobs running and returns them. It is safe to run
 // concurrently from many workers: FOR UPDATE SKIP LOCKED guarantees no job is
@@ -126,7 +126,7 @@ SET status       = 'completed',
     completed_at = now()
 WHERE id = $1 AND status = 'running' AND locked_until = $2
 RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          run_at, locked_until, last_error, created_at, completed_at`
+          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
 
 // Complete marks a claimed job completed. fence is the locked_until the worker
 // got from Claim; if the lease was reclaimed the update matches no row and
@@ -144,7 +144,7 @@ SET status       = CASE WHEN attempts >= max_attempts THEN 'dead' ELSE 'failed' 
     completed_at = CASE WHEN attempts >= max_attempts THEN now() ELSE NULL END
 WHERE id = $1 AND status = 'running' AND locked_until = $2
 RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          run_at, locked_until, last_error, created_at, completed_at`
+          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
 
 // Fail records a failed attempt. While the job has attempts left it is
 // rescheduled for RetryAt; once attempts reach max_attempts it is dead-lettered.

@@ -22,6 +22,7 @@ export default function EnqueueForm({
   const [payload, setPayload] = useState("{}");
   const [runAt, setRunAt] = useState("");
   const [maxAttempts, setMaxAttempts] = useState("3");
+  const [timeoutSeconds, setTimeoutSeconds] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -54,6 +55,15 @@ export default function EnqueueForm({
       }
     }
 
+    let timeout: number | undefined;
+    if (timeoutSeconds.trim() !== "") {
+      timeout = Number(timeoutSeconds);
+      if (!Number.isInteger(timeout) || timeout < 0) {
+        setValidationError("Timeout must be a whole number of seconds (0 for none).");
+        return;
+      }
+    }
+
     let runAtISO: string | undefined;
     if (runAt.trim() !== "") {
       const when = new Date(runAt);
@@ -69,6 +79,7 @@ export default function EnqueueForm({
     if (queue.trim() !== "") req.queue = queue.trim();
     if (runAtISO !== undefined) req.run_at = runAtISO;
     if (attempts !== undefined) req.max_attempts = attempts;
+    if (timeout !== undefined) req.timeout_seconds = timeout;
 
     setBusy(true);
     try {
@@ -106,6 +117,16 @@ export default function EnqueueForm({
             min={1}
             value={maxAttempts}
             onChange={(e) => setMaxAttempts(e.target.value)}
+          />
+        </label>
+        <label>
+          Timeout (s)
+          <input
+            type="number"
+            min={0}
+            placeholder="none"
+            value={timeoutSeconds}
+            onChange={(e) => setTimeoutSeconds(e.target.value)}
           />
         </label>
         <label>
