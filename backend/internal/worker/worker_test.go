@@ -23,14 +23,27 @@ func discardLogger() *slog.Logger {
 type fakeStore struct {
 	mu sync.Mutex
 
-	claimQueue  []queue.Job
-	claimErr    error
-	claimCalls  int
+	claimQueue []queue.Job
+	claimErr   error
+	claimCalls int
+
 	completeErr error
 	failErr     error
 
+	extendCalls  []extendCall
+	extendErr    error
+	extendNew    time.Time     // new fence returned by ExtendLease; zero = fence+lease
+	extendSeq    []time.Time   // fences returned in order; the last value repeats
+	extendSignal chan struct{} // buffered; receives a token on each ExtendLease call
+
 	completeCalls []completeCall
 	failCalls     []queue.FailParams
+}
+
+type extendCall struct {
+	id    string
+	fence time.Time
+	lease time.Duration
 }
 
 type completeCall struct {
@@ -61,6 +74,32 @@ func (f *fakeStore) Complete(_ context.Context, id string, fence time.Time) (que
 		return queue.Job{}, f.completeErr
 	}
 	return queue.Job{ID: id, Status: queue.StatusCompleted}, nil
+}
+
+func (f *fakeStore) ExtendLease(_ context.Context, id string, fence time.Time, lease time.Duration) (time.Time, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.extendCalls = append(f.extendCalls, extendCall{id: id, fence: fence, lease: lease})
+	if f.extendSignal != nil {
+		select {
+		case f.extendSignal <- struct{}{}:
+		default:
+		}
+	}
+	if f.extendErr != nil {
+		return time.Time{}, f.extendErr
+	}
+	if len(f.extendSeq) > 0 {
+		next := f.extendSeq[0]
+		if len(f.extendSeq) > 1 {
+			f.extendSeq = f.extendSeq[1:]
+		}
+		return next, nil
+	}
+	if f.extendNew.IsZero() {
+		return fence.Add(lease), nil
+	}
+	return f.extendNew, nil
 }
 
 func (f *fakeStore) Fail(_ context.Context, p queue.FailParams) (queue.Job, error) {
@@ -180,6 +219,120 @@ func TestProcessJobWithoutLeaseIsIgnored(t *testing.T) {
 
 	if len(store.completeCalls) != 0 || len(store.failCalls) != 0 {
 		t.Errorf("store should not be called without a lease: complete=%d fail=%d",
+			len(store.completeCalls), len(store.failCalls))
+	}
+}
+
+// TestProcessRenewsLeaseWhileHandlerRuns verifies the heartbeat: the handler is
+// allowed to run longer than the original lease, and the terminal Complete uses
+// the renewed fence.
+func TestProcessRenewsLeaseWhileHandlerRuns(t *testing.T) {
+	renewed := testFence.Add(time.Minute)
+	store := &fakeStore{
+		extendNew:    renewed,
+		extendSignal: make(chan struct{}, 1),
+	}
+	w := New(store, map[string]Handler{
+		"slow": func(_ context.Context, _ queue.Job) error {
+			// Wait until the heartbeat has renewed the lease once.
+			select {
+			case <-store.extendSignal:
+			case <-time.After(2 * time.Second):
+			}
+			return nil
+		},
+	}, Config{Lease: 30 * time.Millisecond}, discardLogger())
+
+	w.process(context.Background(), 0, claimedJob("job-renew", "slow", 1))
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.extendCalls) < 1 {
+		t.Fatalf("ExtendLease calls = %d, want >= 1", len(store.extendCalls))
+	}
+	if !store.extendCalls[0].fence.Equal(testFence) {
+		t.Errorf("ExtendLease fence = %v, want original %v", store.extendCalls[0].fence, testFence)
+	}
+	if len(store.completeCalls) != 1 {
+		t.Fatalf("Complete calls = %d, want 1", len(store.completeCalls))
+	}
+	if !store.completeCalls[0].fence.Equal(renewed) {
+		t.Errorf("Complete fence = %v, want renewed %v", store.completeCalls[0].fence, renewed)
+	}
+	if len(store.failCalls) != 0 {
+		t.Errorf("Fail calls = %d, want 0", len(store.failCalls))
+	}
+}
+
+// TestProcessRenewsLeaseMultipleTimes verifies the renewable fence advances
+// across two consecutive renewals and that Complete uses the latest one.
+func TestProcessRenewsLeaseMultipleTimes(t *testing.T) {
+	first := testFence.Add(30 * time.Second)
+	second := testFence.Add(60 * time.Second)
+	store := &fakeStore{
+		extendSeq:    []time.Time{first, second},
+		extendSignal: make(chan struct{}, 2),
+	}
+	w := New(store, map[string]Handler{
+		"slow": func(_ context.Context, _ queue.Job) error {
+			for i := 0; i < 2; i++ {
+				select {
+				case <-store.extendSignal:
+				case <-time.After(2 * time.Second):
+					t.Error("heartbeat did not renew the lease")
+					return nil
+				}
+			}
+			return nil
+		},
+	}, Config{Lease: 30 * time.Millisecond}, discardLogger())
+
+	w.process(context.Background(), 0, claimedJob("job-renew-2", "slow", 1))
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.extendCalls) < 2 {
+		t.Fatalf("ExtendLease calls = %d, want >= 2", len(store.extendCalls))
+	}
+	// The second renewal must be fenced on the first renewal's fence.
+	if !store.extendCalls[1].fence.Equal(first) {
+		t.Errorf("second ExtendLease fence = %v, want first-renewed %v", store.extendCalls[1].fence, first)
+	}
+	if len(store.completeCalls) != 1 {
+		t.Fatalf("Complete calls = %d, want 1", len(store.completeCalls))
+	}
+	if !store.completeCalls[0].fence.Equal(second) {
+		t.Errorf("Complete fence = %v, want second-renewed %v", store.completeCalls[0].fence, second)
+	}
+}
+
+// TestProcessLeaseLostAbortsHandler verifies that when the lease is lost while
+// the handler runs, the handler's context is cancelled and no terminal update
+// is written (the job now belongs to another worker).
+func TestProcessLeaseLostAbortsHandler(t *testing.T) {
+	store := &fakeStore{
+		extendErr:    queue.ErrLeaseLost,
+		extendSignal: make(chan struct{}, 1),
+	}
+	w := New(store, map[string]Handler{
+		"slow": func(ctx context.Context, _ queue.Job) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	}, Config{Lease: 30 * time.Millisecond}, discardLogger())
+
+	w.process(context.Background(), 0, claimedJob("job-lost", "slow", 1))
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.extendCalls) == 0 {
+		t.Error("ExtendLease was not called")
+	}
+	if len(store.completeCalls) != 0 || len(store.failCalls) != 0 {
+		t.Errorf("terminal calls = complete:%d fail:%d, want 0 when the lease is lost",
 			len(store.completeCalls), len(store.failCalls))
 	}
 }

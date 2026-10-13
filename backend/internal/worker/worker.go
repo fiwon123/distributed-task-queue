@@ -29,6 +29,7 @@ type Handler func(ctx context.Context, job queue.Job) error
 // implementation is *queue.Store.
 type Store interface {
 	Claim(ctx context.Context, p queue.ClaimParams) ([]queue.Job, error)
+	ExtendLease(ctx context.Context, id string, fence time.Time, lease time.Duration) (time.Time, error)
 	Complete(ctx context.Context, id string, fence time.Time) (queue.Job, error)
 	Fail(ctx context.Context, p queue.FailParams) (queue.Job, error)
 }
@@ -185,23 +186,44 @@ func (w *Worker) loop(runCtx, workCtx context.Context, id int) {
 }
 
 // process runs one claimed job and records its outcome.
+//
+// While the handler runs, a heartbeat renews the job's lease so a handler that
+// outlives its original lease is not reclaimed by another worker and run twice
+// even though nothing crashed. If the lease is lost anyway (it lapsed and
+// someone else took the job), the handler's context is cancelled and the row is
+// left to its new owner.
 func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
-	handler, ok := w.handlers[job.Type]
-	if !ok {
-		w.fail(ctx, workerID, job, fmt.Errorf("no handler registered for job type %q", job.Type))
-		return
-	}
-
-	if err := handler(ctx, job); err != nil {
-		w.fail(ctx, workerID, job, err)
-		return
-	}
-
 	if job.LockedUntil == nil {
 		w.log.Error("claimed job is missing its lease", "worker", workerID, "job", job.ID)
 		return
 	}
-	if _, err := w.store.Complete(ctx, job.ID, *job.LockedUntil); err != nil {
+	handler, ok := w.handlers[job.Type]
+	if !ok {
+		w.fail(ctx, workerID, job, *job.LockedUntil,
+			fmt.Errorf("no handler registered for job type %q", job.Type))
+		return
+	}
+
+	jobCtx, cancelJob := context.WithCancel(ctx)
+	defer cancelJob()
+	renewer := newLeaseRenewer(w.store, job.ID, w.cfg.Lease, *job.LockedUntil, w.log, cancelJob)
+	stop := w.startHeartbeat(jobCtx, renewer)
+
+	runErr := handler(jobCtx, job)
+	stop() // stop renewing before the terminal update so the fence is stable
+
+	fence, leaseLost := renewer.state()
+	if leaseLost {
+		w.log.Warn("lease lost while running job; leaving it to the new owner",
+			"worker", workerID, "job", job.ID)
+		return
+	}
+	if runErr != nil {
+		w.fail(ctx, workerID, job, fence, runErr)
+		return
+	}
+
+	if _, err := w.store.Complete(ctx, job.ID, fence); err != nil {
 		w.logLeaseOrError("complete", workerID, job.ID, err)
 		return
 	}
@@ -209,19 +231,124 @@ func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 		"worker", workerID, "job", job.ID, "type", job.Type, "attempts", job.Attempts)
 }
 
-// fail records a failed attempt, scheduling a retry or dead-lettering.
-func (w *Worker) fail(ctx context.Context, workerID int, job queue.Job, cause error) {
-	if job.LockedUntil == nil {
-		w.log.Error("claimed job is missing its lease", "worker", workerID, "job", job.ID)
-		return
+// startHeartbeat renews the lease on a running job every Lease/3 until stop is
+// called or the lease is lost. The returned stop function is idempotent and
+// blocks until the heartbeat goroutine has exited, so once it returns the
+// renewer's fence is stable and no renewal can race the terminal update.
+func (w *Worker) startHeartbeat(ctx context.Context, r *leaseRenewer) func() {
+	interval := w.cfg.Lease / 3
+	if interval <= 0 {
+		interval = w.cfg.Lease
 	}
 
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			close(done)
+			<-stopped
+		})
+	}
+
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				// The handler's context was cancelled from outside (for example
+				// the shutdown drain window closed), so we stop renewing and let
+				// the lease lapse.
+				return
+			case <-ticker.C:
+				if !r.renew(ctx) {
+					return
+				}
+			}
+		}
+	}()
+	return stop
+}
+
+// leaseRenewer tracks the fence of a claimed job while its lease is renewed by
+// the heartbeat. It is safe for concurrent use: the heartbeat goroutine writes,
+// and process reads the final state after stopping the heartbeat.
+type leaseRenewer struct {
+	store  Store
+	id     string
+	lease  time.Duration
+	log    *slog.Logger
+	cancel context.CancelFunc
+
+	mu    sync.Mutex
+	fence time.Time
+	lost  bool
+}
+
+func newLeaseRenewer(store Store, id string, lease time.Duration, fence time.Time, log *slog.Logger, cancel context.CancelFunc) *leaseRenewer {
+	return &leaseRenewer{
+		store:  store,
+		id:     id,
+		lease:  lease,
+		log:    log,
+		cancel: cancel,
+		fence:  fence,
+	}
+}
+
+// renew extends the lease once. It returns true if the worker still holds the
+// lease, and false when it was lost — after cancelling the handler so it stops
+// touching a job another worker now owns.
+func (r *leaseRenewer) renew(ctx context.Context) bool {
+	r.mu.Lock()
+	fence := r.fence
+	r.mu.Unlock()
+
+	newFence, err := r.store.ExtendLease(ctx, r.id, fence, r.lease)
+	if err != nil {
+		if errors.Is(err, queue.ErrLeaseLost) {
+			r.mu.Lock()
+			r.lost = true
+			r.mu.Unlock()
+			r.log.Warn("lease lost while running job", "job", r.id)
+			r.cancel()
+			return false
+		}
+		// A transient renewal failure is not fatal: the next tick retries with
+		// the current fence well before the lease would expire. If the failed
+		// call actually committed and only the response was lost, the next
+		// renewal is rejected as stale; the lease is treated as lost and the job
+		// is reclaimed and re-run — which at-least-once delivery already allows.
+		r.log.Error("extend lease", "job", r.id, "error", err)
+		return true
+	}
+
+	r.mu.Lock()
+	r.fence = newFence
+	r.mu.Unlock()
+	return true
+}
+
+// state returns the current lease fence and whether the lease was lost.
+func (r *leaseRenewer) state() (time.Time, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.fence, r.lost
+}
+
+// fail records a failed attempt, scheduling a retry or dead-lettering. fence is
+// the lease value the caller last saw, renewed or original.
+func (w *Worker) fail(ctx context.Context, workerID int, job queue.Job, fence time.Time, cause error) {
 	retryAt := w.now().Add(w.backoff(job.Attempts))
 	failed, err := w.store.Fail(ctx, queue.FailParams{
 		ID:      job.ID,
 		Cause:   cause.Error(),
 		RetryAt: retryAt,
-		Fence:   *job.LockedUntil,
+		Fence:   fence,
 	})
 	if err != nil {
 		w.logLeaseOrError("fail", workerID, job.ID, err)

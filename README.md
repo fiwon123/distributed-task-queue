@@ -177,6 +177,10 @@ drifts).
   effect but before its status update, so handlers must be idempotent.
 - **Leases for abandoned work** — a claimed job is hidden until `locked_until`;
   when a worker dies, the lease expires and the job becomes claimable again.
+  While a handler runs, its worker renews the lease (a heartbeat), so a
+  long-running job is not reclaimed mid-run — only a worker that stops
+  renewing, because it died or its shutdown drain window closed, loses its
+  claim.
 - **Bounded retries with backoff** — each failure pushes `run_at` further out;
   a job that exhausts `max_attempts` moves to `dead`.
 - **No strict global ordering** — jobs are independent; serialize inside a
