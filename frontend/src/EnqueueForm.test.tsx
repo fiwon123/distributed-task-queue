@@ -20,6 +20,7 @@ const created: Job = {
   type: "echo",
   payload: { n: 1 },
   queue: "critical",
+  priority: 0,
   status: "pending",
   attempts: 0,
   max_attempts: 5,
@@ -56,6 +57,7 @@ describe("EnqueueForm", () => {
     render(<EnqueueForm onEnqueued={onEnqueued} onError={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("Queue"), { target: { value: "critical" } });
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "7" } });
     fireEvent.change(screen.getByLabelText("Payload (JSON)"), { target: { value: '{"n":1}' } });
     fireEvent.change(screen.getByLabelText("Max attempts"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Timeout (s)"), { target: { value: "30" } });
@@ -69,6 +71,7 @@ describe("EnqueueForm", () => {
       type: "echo",
       payload: { n: 1 },
       queue: "critical",
+      priority: 7,
       max_attempts: 5,
       timeout_seconds: 30,
     });

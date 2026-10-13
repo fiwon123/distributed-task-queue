@@ -21,6 +21,7 @@ type enqueueRequest struct {
 	Type           string          `json:"type"`
 	Payload        json.RawMessage `json:"payload"`
 	Queue          string          `json:"queue"`
+	Priority       *int            `json:"priority"`
 	RunAt          *time.Time      `json:"run_at"`
 	MaxAttempts    *int            `json:"max_attempts"`
 	TimeoutSeconds *int            `json:"timeout_seconds"`
@@ -44,6 +45,7 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 		Type:           req.Type,
 		Payload:        req.Payload,
 		Queue:          req.Queue,
+		Priority:       req.Priority,
 		RunAt:          req.RunAt,
 		MaxAttempts:    req.MaxAttempts,
 		TimeoutSeconds: req.TimeoutSeconds,

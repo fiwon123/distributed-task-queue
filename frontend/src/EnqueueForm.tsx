@@ -19,6 +19,7 @@ export default function EnqueueForm({
 }) {
   const [type, setType] = useState("echo");
   const [queue, setQueue] = useState("");
+  const [priority, setPriority] = useState("");
   const [payload, setPayload] = useState("{}");
   const [runAt, setRunAt] = useState("");
   const [maxAttempts, setMaxAttempts] = useState("3");
@@ -55,6 +56,15 @@ export default function EnqueueForm({
       }
     }
 
+    let priorityValue: number | undefined;
+    if (priority.trim() !== "") {
+      priorityValue = Number(priority);
+      if (!Number.isInteger(priorityValue) || priorityValue < 0) {
+        setValidationError("Priority must be a whole number of at least 0.");
+        return;
+      }
+    }
+
     let timeout: number | undefined;
     if (timeoutSeconds.trim() !== "") {
       timeout = Number(timeoutSeconds);
@@ -77,6 +87,7 @@ export default function EnqueueForm({
     const req: EnqueueRequest = { type: trimmedType };
     if (parsedPayload !== undefined) req.payload = parsedPayload;
     if (queue.trim() !== "") req.queue = queue.trim();
+    if (priorityValue !== undefined) req.priority = priorityValue;
     if (runAtISO !== undefined) req.run_at = runAtISO;
     if (attempts !== undefined) req.max_attempts = attempts;
     if (timeout !== undefined) req.timeout_seconds = timeout;
@@ -109,6 +120,16 @@ export default function EnqueueForm({
         <label>
           Queue
           <input value={queue} placeholder="default" onChange={(e) => setQueue(e.target.value)} />
+        </label>
+        <label>
+          Priority
+          <input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+          />
         </label>
         <label>
           Max attempts

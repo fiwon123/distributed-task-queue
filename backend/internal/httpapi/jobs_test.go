@@ -135,7 +135,7 @@ func do(t *testing.T, store JobStore, method, target, body string) *httptest.Res
 
 func TestHandleEnqueueCreated(t *testing.T) {
 	store := &fakeStore{}
-	body := `{"type":"email","payload":{"to":"a@b.c"},"queue":"critical","max_attempts":5,"timeout_seconds":30}`
+	body := `{"type":"email","payload":{"to":"a@b.c"},"queue":"critical","priority":9,"max_attempts":5,"timeout_seconds":30}`
 
 	w := do(t, store, http.MethodPost, "/v1/jobs", body)
 
@@ -163,6 +163,9 @@ func TestHandleEnqueueCreated(t *testing.T) {
 	p := store.enqueueParams[0]
 	if p.Type != "email" || p.Queue != "critical" {
 		t.Errorf("params type/queue = %q/%q", p.Type, p.Queue)
+	}
+	if p.Priority == nil || *p.Priority != 9 {
+		t.Errorf("priority = %v, want 9", p.Priority)
 	}
 	if p.MaxAttempts == nil || *p.MaxAttempts != 5 {
 		t.Errorf("max_attempts = %v, want 5", p.MaxAttempts)

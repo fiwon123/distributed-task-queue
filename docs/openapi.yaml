@@ -276,6 +276,7 @@ components:
         - type
         - payload
         - queue
+        - priority
         - status
         - attempts
         - max_attempts
@@ -293,6 +294,12 @@ components:
         queue:
           type: string
           example: default
+        priority:
+          type: integer
+          description: >
+            Claim priority; higher numbers are claimed first, with `run_at`
+            breaking ties. Defaults to 0.
+          example: 5
         status:
           $ref: '#/components/schemas/JobStatus'
         attempts:
@@ -345,6 +352,13 @@ components:
           type: string
           default: default
           description: Queue name. Defaults to `default`.
+        priority:
+          type: integer
+          minimum: 0
+          default: 0
+          description: >
+            Claim priority; higher is claimed first. `run_at` breaks ties.
+            Defaults to 0.
         run_at:
           type: string
           format: date-time

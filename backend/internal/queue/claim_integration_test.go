@@ -348,6 +348,52 @@ func TestFencedUpdatesRejectStaleLease(t *testing.T) {
 	}
 }
 
+// TestClaimPrefersPriorityThenRunAt verifies the claim ordering: higher
+// priority first, run_at breaking ties. jobD is due earliest but has the lowest
+// priority, so it must be claimed last.
+func TestClaimPrefersPriorityThenRunAt(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	now := time.Now()
+	enqueueAt := func(typ string, priority int, runAt time.Time) Job {
+		t.Helper()
+		job, err := store.Enqueue(ctx, EnqueueParams{
+			Type:     typ,
+			Queue:    q,
+			Priority: intPtr(priority),
+			RunAt:    &runAt,
+		})
+		if err != nil {
+			t.Fatalf("enqueue %s: %v", typ, err)
+		}
+		if job.Priority != priority {
+			t.Fatalf("%s priority = %d, want %d", typ, job.Priority, priority)
+		}
+		return job
+	}
+	jobA := enqueueAt("a", 1, now.Add(-3*time.Second))
+	jobB := enqueueAt("b", 5, now.Add(-2*time.Second))
+	jobC := enqueueAt("c", 5, now.Add(-1*time.Second))
+	jobD := enqueueAt("d", 0, now.Add(-4*time.Second))
+
+	claimed, err := store.Claim(ctx, ClaimParams{Queues: []string{q}, Lease: time.Minute, Limit: 4})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	got := make([]string, 0, len(claimed))
+	for _, job := range claimed {
+		got = append(got, job.ID)
+	}
+	want := []string{jobB.ID, jobC.ID, jobA.ID, jobD.ID}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("claim order = %v, want %v (priority DESC, run_at ASC)", got, want)
+	}
+}
+
 func TestClaimSkipsFutureRunAt(t *testing.T) {
 	pool := testPool(t)
 	store := New(pool)

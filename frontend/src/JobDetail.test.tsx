@@ -20,6 +20,7 @@ const base: Job = {
   type: "echo",
   payload: { hello: "world" },
   queue: "default",
+  priority: 0,
   status: "running",
   attempts: 1,
   max_attempts: 3,
@@ -40,7 +41,9 @@ describe("JobDetail", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        jsonResponse(job({ status: "dead", last_error: "kaboom", timeout_seconds: 30 })),
+        jsonResponse(
+          job({ status: "dead", last_error: "kaboom", timeout_seconds: 30, priority: 5 }),
+        ),
       ),
     );
     render(<JobDetail id={base.id} pollIntervalMs={1000} />);
@@ -49,6 +52,7 @@ describe("JobDetail", () => {
     expect(within(region).getByText("kaboom")).toBeInTheDocument();
     expect(within(region).getByText(/1 \/ 3/)).toBeInTheDocument();
     expect(within(region).getByText("30s")).toBeInTheDocument();
+    expect(within(region).getByText("5")).toBeInTheDocument();
     expect(within(region).getByText(/"hello": "world"/)).toBeInTheDocument();
   });
 

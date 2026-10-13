@@ -27,6 +27,7 @@ func TestNormalize(t *testing.T) {
 				Payload:     json.RawMessage(`{}`),
 				Queue:       DefaultQueue,
 				MaxAttempts: intPtr(DefaultMaxAttempts),
+				Priority:    intPtr(0),
 			},
 		},
 		{
@@ -35,6 +36,7 @@ func TestNormalize(t *testing.T) {
 				Type:           "  email  ",
 				Payload:        json.RawMessage(`{"to":"a@b.c"}`),
 				Queue:          "  critical ",
+				Priority:       intPtr(9),
 				RunAt:          &when,
 				MaxAttempts:    &five,
 				TimeoutSeconds: intPtr(30),
@@ -43,6 +45,7 @@ func TestNormalize(t *testing.T) {
 				Type:           "email",
 				Payload:        json.RawMessage(`{"to":"a@b.c"}`),
 				Queue:          "critical",
+				Priority:       intPtr(9),
 				RunAt:          &when,
 				MaxAttempts:    &five,
 				TimeoutSeconds: intPtr(30),
@@ -57,6 +60,7 @@ func TestNormalize(t *testing.T) {
 				Queue:          DefaultQueue,
 				MaxAttempts:    intPtr(DefaultMaxAttempts),
 				TimeoutSeconds: intPtr(0),
+				Priority:       intPtr(0),
 			},
 		},
 		{
@@ -83,6 +87,11 @@ func TestNormalize(t *testing.T) {
 			name:    "rejects negative timeout_seconds",
 			in:      EnqueueParams{Type: "email", TimeoutSeconds: intPtr(-1)},
 			wantErr: "timeout_seconds must not be negative",
+		},
+		{
+			name:    "rejects negative priority",
+			in:      EnqueueParams{Type: "email", Priority: intPtr(-1)},
+			wantErr: "priority must not be negative",
 		},
 	}
 
@@ -121,6 +130,12 @@ func TestNormalize(t *testing.T) {
 			}
 			if got.TimeoutSeconds != nil && *got.TimeoutSeconds != *tc.want.TimeoutSeconds {
 				t.Errorf("timeout_seconds = %d, want %d", *got.TimeoutSeconds, *tc.want.TimeoutSeconds)
+			}
+			if (got.Priority == nil) != (tc.want.Priority == nil) {
+				t.Fatalf("priority = %v, want %v", got.Priority, tc.want.Priority)
+			}
+			if got.Priority != nil && *got.Priority != *tc.want.Priority {
+				t.Errorf("priority = %d, want %d", *got.Priority, *tc.want.Priority)
 			}
 			if (got.RunAt == nil) != (tc.want.RunAt == nil) {
 				t.Fatalf("run_at = %v, want %v", got.RunAt, tc.want.RunAt)

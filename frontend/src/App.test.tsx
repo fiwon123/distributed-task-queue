@@ -28,6 +28,7 @@ const deadJob: Job = {
   type: "email",
   payload: { to: "a@b.c" },
   queue: "critical",
+  priority: 0,
   status: "dead",
   attempts: 3,
   max_attempts: 3,
