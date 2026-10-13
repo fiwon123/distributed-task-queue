@@ -257,6 +257,35 @@ func TestProcessTimeoutFailsAttempt(t *testing.T) {
 	}
 }
 
+// TestProcessTimeoutFailsAttemptEvenIfHandlerIgnoresCtx covers a handler that
+// never observes ctx and returns nil after overrunning its deadline: the worker
+// must still fail the attempt rather than completing it.
+func TestProcessTimeoutFailsAttemptEvenIfHandlerIgnoresCtx(t *testing.T) {
+	store := &fakeStore{}
+	w := New(store, map[string]Handler{
+		"stubborn": func(context.Context, queue.Job) error {
+			time.Sleep(1200 * time.Millisecond)
+			return nil
+		},
+	}, Config{Lease: 30 * time.Second}, discardLogger())
+
+	job := claimedJob("job-stubborn", "stubborn", 1)
+	timeout := 1
+	job.TimeoutSeconds = &timeout
+
+	w.process(context.Background(), 0, job)
+
+	if len(store.completeCalls) != 0 {
+		t.Fatalf("Complete calls = %d, want 0 (a timed-out job must not complete)", len(store.completeCalls))
+	}
+	if len(store.failCalls) != 1 {
+		t.Fatalf("Fail calls = %d, want 1", len(store.failCalls))
+	}
+	if cause := store.failCalls[0].Cause; !strings.Contains(cause, "execution timed out after 1 seconds") {
+		t.Errorf("Fail cause = %q, want it to name the timeout", cause)
+	}
+}
+
 // TestProcessWithoutTimeoutIsNotDeadlineBound verifies that a job without
 // timeout_seconds is not cancelled by the worker: a short wait completes
 // normally, so the feature is opt-in per job.

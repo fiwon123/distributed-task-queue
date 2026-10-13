@@ -209,9 +209,12 @@ func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 		return
 	}
 
-	jobCtx, cancelJob := context.WithCancel(ctx)
+	jobCtx := ctx
+	var cancelJob context.CancelFunc
 	if job.TimeoutSeconds != nil && *job.TimeoutSeconds > 0 {
 		jobCtx, cancelJob = context.WithTimeout(ctx, time.Duration(*job.TimeoutSeconds)*time.Second)
+	} else {
+		jobCtx, cancelJob = context.WithCancel(ctx)
 	}
 	defer cancelJob()
 	renewer := newLeaseRenewer(w.store, job.ID, w.cfg.Lease, *job.LockedUntil, w.log, cancelJob)
@@ -226,10 +229,15 @@ func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 			"worker", workerID, "job", job.ID)
 		return
 	}
+
+	// A fired deadline is a failure even when the handler returned nil: a
+	// handler that ignores ctx and finishes anyway still overran its budget, and
+	// completing the job would hide that. No timeout means jobCtx can never be
+	// DeadlineExceeded.
+	if jobCtx.Err() == context.DeadlineExceeded {
+		runErr = fmt.Errorf("execution timed out after %d seconds", *job.TimeoutSeconds)
+	}
 	if runErr != nil {
-		if jobCtx.Err() == context.DeadlineExceeded {
-			runErr = fmt.Errorf("execution timed out after %d seconds", *job.TimeoutSeconds)
-		}
 		w.fail(ctx, workerID, job, fence, runErr)
 		return
 	}
