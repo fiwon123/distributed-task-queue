@@ -32,18 +32,31 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "preserves and trims provided fields",
 			in: EnqueueParams{
-				Type:        "  email  ",
-				Payload:     json.RawMessage(`{"to":"a@b.c"}`),
-				Queue:       "  critical ",
-				RunAt:       &when,
-				MaxAttempts: &five,
+				Type:           "  email  ",
+				Payload:        json.RawMessage(`{"to":"a@b.c"}`),
+				Queue:          "  critical ",
+				RunAt:          &when,
+				MaxAttempts:    &five,
+				TimeoutSeconds: intPtr(30),
 			},
 			want: EnqueueParams{
-				Type:        "email",
-				Payload:     json.RawMessage(`{"to":"a@b.c"}`),
-				Queue:       "critical",
-				RunAt:       &when,
-				MaxAttempts: &five,
+				Type:           "email",
+				Payload:        json.RawMessage(`{"to":"a@b.c"}`),
+				Queue:          "critical",
+				RunAt:          &when,
+				MaxAttempts:    &five,
+				TimeoutSeconds: intPtr(30),
+			},
+		},
+		{
+			name: "accepts zero timeout_seconds as no timeout",
+			in:   EnqueueParams{Type: "email", TimeoutSeconds: intPtr(0)},
+			want: EnqueueParams{
+				Type:           "email",
+				Payload:        json.RawMessage(`{}`),
+				Queue:          DefaultQueue,
+				MaxAttempts:    intPtr(DefaultMaxAttempts),
+				TimeoutSeconds: intPtr(0),
 			},
 		},
 		{
@@ -65,6 +78,11 @@ func TestNormalize(t *testing.T) {
 			name:    "rejects negative max_attempts",
 			in:      EnqueueParams{Type: "email", MaxAttempts: intPtr(-3)},
 			wantErr: "max_attempts must be at least 1",
+		},
+		{
+			name:    "rejects negative timeout_seconds",
+			in:      EnqueueParams{Type: "email", TimeoutSeconds: intPtr(-1)},
+			wantErr: "timeout_seconds must not be negative",
 		},
 	}
 
@@ -97,6 +115,12 @@ func TestNormalize(t *testing.T) {
 			}
 			if got.MaxAttempts != nil && *got.MaxAttempts != *tc.want.MaxAttempts {
 				t.Errorf("max_attempts = %d, want %d", *got.MaxAttempts, *tc.want.MaxAttempts)
+			}
+			if (got.TimeoutSeconds == nil) != (tc.want.TimeoutSeconds == nil) {
+				t.Fatalf("timeout_seconds = %v, want %v", got.TimeoutSeconds, tc.want.TimeoutSeconds)
+			}
+			if got.TimeoutSeconds != nil && *got.TimeoutSeconds != *tc.want.TimeoutSeconds {
+				t.Errorf("timeout_seconds = %d, want %d", *got.TimeoutSeconds, *tc.want.TimeoutSeconds)
 			}
 			if (got.RunAt == nil) != (tc.want.RunAt == nil) {
 				t.Fatalf("run_at = %v, want %v", got.RunAt, tc.want.RunAt)

@@ -192,6 +192,11 @@ func (w *Worker) loop(runCtx, workCtx context.Context, id int) {
 // even though nothing crashed. If the lease is lost anyway (it lapsed and
 // someone else took the job), the handler's context is cancelled and the row is
 // left to its new owner.
+//
+// A job configured with a per-job timeout (timeout_seconds) runs under a
+// deadline: when it expires the handler's context is cancelled and the attempt
+// fails with a clear timeout error, which retries or dead-letters per the usual
+// rules.
 func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 	if job.LockedUntil == nil {
 		w.log.Error("claimed job is missing its lease", "worker", workerID, "job", job.ID)
@@ -204,7 +209,13 @@ func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 		return
 	}
 
-	jobCtx, cancelJob := context.WithCancel(ctx)
+	jobCtx := ctx
+	var cancelJob context.CancelFunc
+	if job.TimeoutSeconds != nil && *job.TimeoutSeconds > 0 {
+		jobCtx, cancelJob = context.WithTimeout(ctx, time.Duration(*job.TimeoutSeconds)*time.Second)
+	} else {
+		jobCtx, cancelJob = context.WithCancel(ctx)
+	}
 	defer cancelJob()
 	renewer := newLeaseRenewer(w.store, job.ID, w.cfg.Lease, *job.LockedUntil, w.log, cancelJob)
 	stop := w.startHeartbeat(jobCtx, renewer)
@@ -217,6 +228,15 @@ func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 		w.log.Warn("lease lost while running job; leaving it to the new owner",
 			"worker", workerID, "job", job.ID)
 		return
+	}
+
+	// A fired deadline is a failure even when the handler returned nil: a
+	// handler that ignores ctx and finishes anyway still overran its budget, and
+	// completing the job would hide that. No timeout means jobCtx cannot be
+	// DeadlineExceeded, and the guard keeps the pointer dereference obviously
+	// safe.
+	if job.TimeoutSeconds != nil && jobCtx.Err() == context.DeadlineExceeded {
+		runErr = fmt.Errorf("execution timed out after %d seconds", *job.TimeoutSeconds)
 	}
 	if runErr != nil {
 		w.fail(ctx, workerID, job, fence, runErr)
