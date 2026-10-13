@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -65,6 +66,10 @@ func normalize(p EnqueueParams) (EnqueueParams, error) {
 		p.Priority = &n
 	} else if *p.Priority < 0 {
 		return EnqueueParams{}, &ValidationError{Message: "priority must not be negative"}
+	} else if *p.Priority > math.MaxInt32 {
+		// The column is int4; anything larger would fail at the DB with an
+		// opaque range error. Reject it here so the client gets a 400, not a 500.
+		return EnqueueParams{}, &ValidationError{Message: "priority must be at most 2147483647"}
 	}
 
 	return p, nil
@@ -72,7 +77,7 @@ func normalize(p EnqueueParams) (EnqueueParams, error) {
 
 const enqueueSQL = `
 INSERT INTO jobs (type, payload, queue, priority, run_at, max_attempts, timeout_seconds)
-VALUES ($1, $2, $3, COALESCE($4, 0), COALESCE($5, now()), $6, $7)
+VALUES ($1, $2, $3, $4, COALESCE($5, now()), $6, $7)
 RETURNING id::text, type, payload, queue, priority, status, attempts,
           max_attempts, timeout_seconds, run_at, locked_until, last_error,
           created_at, completed_at`

@@ -140,6 +140,19 @@ describe("EnqueueForm", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a priority above the int4 range without calling the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "2147483648" } });
+    await user.click(screen.getByRole("button", { name: "Enqueue job" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/at most 2147483647/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("surfaces an API error through onError", async () => {
     vi.stubGlobal(
       "fetch",

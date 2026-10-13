@@ -118,12 +118,16 @@ func (s *Store) Claim(ctx context.Context, p ClaimParams) ([]Job, error) {
 	// The UPDATE that backs claimSQL returns rows in an unspecified order — only
 	// the SET of claimed rows is guaranteed by the CTE's ORDER BY + LIMIT (that
 	// is what decides which due jobs win). Restore the documented order here so
-	// callers see highest priority first, run_at breaking ties.
+	// callers see highest priority first, run_at breaking ties; id is a final
+	// tie-break so the order is fully deterministic.
 	sort.SliceStable(jobs, func(i, j int) bool {
 		if jobs[i].Priority != jobs[j].Priority {
 			return jobs[i].Priority > jobs[j].Priority
 		}
-		return jobs[i].RunAt.Before(jobs[j].RunAt)
+		if !jobs[i].RunAt.Equal(jobs[j].RunAt) {
+			return jobs[i].RunAt.Before(jobs[j].RunAt)
+		}
+		return jobs[i].ID < jobs[j].ID
 	})
 
 	if err := tx.Commit(ctx); err != nil {

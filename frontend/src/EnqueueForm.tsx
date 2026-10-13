@@ -63,6 +63,11 @@ export default function EnqueueForm({
         setValidationError("Priority must be a whole number of at least 0.");
         return;
       }
+      // Mirrors the server: the column is int4, larger values would 500.
+      if (priorityValue > 2147483647) {
+        setValidationError("Priority must be at most 2147483647.");
+        return;
+      }
     }
 
     let timeout: number | undefined;

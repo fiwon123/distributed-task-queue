@@ -5,6 +5,7 @@ package queue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -391,6 +392,46 @@ func TestClaimPrefersPriorityThenRunAt(t *testing.T) {
 	want := []string{jobB.ID, jobC.ID, jobA.ID, jobD.ID}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("claim order = %v, want %v (priority DESC, run_at ASC)", got, want)
+	}
+}
+
+// TestClaimLimitTakesHighestPriority guards the SQL side of the ordering: with
+// more due jobs than the limit, the CTE's ORDER BY + LIMIT must pick the
+// highest-priority jobs (not the in-memory sort, which would reorder whatever
+// rows came back). If the SQL ordering regressed to ascend, this test fails
+// while TestClaimPrefersPriorityThenRunAt would still pass.
+func TestClaimLimitTakesHighestPriority(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	now := time.Now()
+	// Five due jobs with priorities 0..4; only the two highest may win.
+	ids := make([]string, 5)
+	for p := 0; p < 5; p++ {
+		job, err := store.Enqueue(ctx, EnqueueParams{
+			Type:     fmt.Sprintf("p%d", p),
+			Queue:    q,
+			Priority: intPtr(p),
+			RunAt:    &now,
+		})
+		if err != nil {
+			t.Fatalf("enqueue priority %d: %v", p, err)
+		}
+		ids[p] = job.ID
+	}
+
+	claimed, err := store.Claim(ctx, ClaimParams{Queues: []string{q}, Lease: time.Minute, Limit: 2})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(claimed) != 2 {
+		t.Fatalf("claimed %d jobs, want 2", len(claimed))
+	}
+	if claimed[0].ID != ids[4] || claimed[1].ID != ids[3] {
+		t.Errorf("limit 2 claimed priorities %d/%d, want 4/3 (SQL ordering)", claimed[0].Priority, claimed[1].Priority)
 	}
 }
 

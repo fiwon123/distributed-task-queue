@@ -3,6 +3,7 @@ package queue
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -92,6 +93,25 @@ func TestNormalize(t *testing.T) {
 			name:    "rejects negative priority",
 			in:      EnqueueParams{Type: "email", Priority: intPtr(-1)},
 			wantErr: "priority must not be negative",
+		},
+		{
+			name: "rejects priority above int4 range",
+			in: EnqueueParams{
+				Type:     "email",
+				Priority: intPtr(math.MaxInt32 + 1),
+			},
+			wantErr: "priority must be at most 2147483647",
+		},
+		{
+			name: "accepts priority at int4 max",
+			in:   EnqueueParams{Type: "email", Priority: intPtr(math.MaxInt32)},
+			want: EnqueueParams{
+				Type:        "email",
+				Payload:     json.RawMessage(`{}`),
+				Queue:       DefaultQueue,
+				MaxAttempts: intPtr(DefaultMaxAttempts),
+				Priority:    intPtr(math.MaxInt32),
+			},
 		},
 	}
 

@@ -298,7 +298,7 @@ components:
           type: integer
           description: >
             Claim priority; higher numbers are claimed first, with `run_at`
-            breaking ties. Defaults to 0.
+            breaking ties. Always present on a stored job.
           example: 5
         status:
           $ref: '#/components/schemas/JobStatus'
@@ -355,6 +355,7 @@ components:
         priority:
           type: integer
           minimum: 0
+          maximum: 2147483647
           default: 0
           description: >
             Claim priority; higher is claimed first. `run_at` breaks ties.
