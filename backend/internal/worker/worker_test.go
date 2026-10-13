@@ -33,6 +33,7 @@ type fakeStore struct {
 	extendCalls  []extendCall
 	extendErr    error
 	extendNew    time.Time     // new fence returned by ExtendLease; zero = fence+lease
+	extendSeq    []time.Time   // fences returned in order; the last value repeats
 	extendSignal chan struct{} // buffered; receives a token on each ExtendLease call
 
 	completeCalls []completeCall
@@ -87,6 +88,13 @@ func (f *fakeStore) ExtendLease(_ context.Context, id string, fence time.Time, l
 	}
 	if f.extendErr != nil {
 		return time.Time{}, f.extendErr
+	}
+	if len(f.extendSeq) > 0 {
+		next := f.extendSeq[0]
+		if len(f.extendSeq) > 1 {
+			f.extendSeq = f.extendSeq[1:]
+		}
+		return next, nil
 	}
 	if f.extendNew.IsZero() {
 		return fence.Add(lease), nil
@@ -240,8 +248,8 @@ func TestProcessRenewsLeaseWhileHandlerRuns(t *testing.T) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	if len(store.extendCalls) != 1 {
-		t.Fatalf("ExtendLease calls = %d, want 1", len(store.extendCalls))
+	if len(store.extendCalls) < 1 {
+		t.Fatalf("ExtendLease calls = %d, want >= 1", len(store.extendCalls))
 	}
 	if !store.extendCalls[0].fence.Equal(testFence) {
 		t.Errorf("ExtendLease fence = %v, want original %v", store.extendCalls[0].fence, testFence)
@@ -254,6 +262,49 @@ func TestProcessRenewsLeaseWhileHandlerRuns(t *testing.T) {
 	}
 	if len(store.failCalls) != 0 {
 		t.Errorf("Fail calls = %d, want 0", len(store.failCalls))
+	}
+}
+
+// TestProcessRenewsLeaseMultipleTimes verifies the renewable fence advances
+// across two consecutive renewals and that Complete uses the latest one.
+func TestProcessRenewsLeaseMultipleTimes(t *testing.T) {
+	first := testFence.Add(30 * time.Second)
+	second := testFence.Add(60 * time.Second)
+	store := &fakeStore{
+		extendSeq:    []time.Time{first, second},
+		extendSignal: make(chan struct{}, 2),
+	}
+	w := New(store, map[string]Handler{
+		"slow": func(_ context.Context, _ queue.Job) error {
+			for i := 0; i < 2; i++ {
+				select {
+				case <-store.extendSignal:
+				case <-time.After(2 * time.Second):
+					t.Error("heartbeat did not renew the lease")
+					return nil
+				}
+			}
+			return nil
+		},
+	}, Config{Lease: 30 * time.Millisecond}, discardLogger())
+
+	w.process(context.Background(), 0, claimedJob("job-renew-2", "slow", 1))
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if len(store.extendCalls) < 2 {
+		t.Fatalf("ExtendLease calls = %d, want >= 2", len(store.extendCalls))
+	}
+	// The second renewal must be fenced on the first renewal's fence.
+	if !store.extendCalls[1].fence.Equal(first) {
+		t.Errorf("second ExtendLease fence = %v, want first-renewed %v", store.extendCalls[1].fence, first)
+	}
+	if len(store.completeCalls) != 1 {
+		t.Fatalf("Complete calls = %d, want 1", len(store.completeCalls))
+	}
+	if !store.completeCalls[0].fence.Equal(second) {
+		t.Errorf("Complete fence = %v, want second-renewed %v", store.completeCalls[0].fence, second)
 	}
 }
 

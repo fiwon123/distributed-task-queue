@@ -318,8 +318,11 @@ func (r *leaseRenewer) renew(ctx context.Context) bool {
 			r.cancel()
 			return false
 		}
-		// A transient renewal failure is not fatal: the next tick retries well
-		// before the lease would expire.
+		// A transient renewal failure is not fatal: the next tick retries with
+		// the current fence well before the lease would expire. If the failed
+		// call actually committed and only the response was lost, the next
+		// renewal is rejected as stale; the lease is treated as lost and the job
+		// is reclaimed and re-run — which at-least-once delivery already allows.
 		r.log.Error("extend lease", "job", r.id, "error", err)
 		return true
 	}
