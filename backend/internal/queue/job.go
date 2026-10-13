@@ -51,6 +51,7 @@ type Job struct {
 	Type           string          `json:"type"`
 	Payload        json.RawMessage `json:"payload"`
 	Queue          string          `json:"queue"`
+	Priority       int             `json:"priority"`
 	Status         Status          `json:"status"`
 	Attempts       int             `json:"attempts"`
 	MaxAttempts    int             `json:"max_attempts"`
@@ -64,11 +65,12 @@ type Job struct {
 
 // EnqueueParams describes a job to enqueue. Type is required; Payload defaults
 // to an empty object, Queue to DefaultQueue, MaxAttempts to
-// DefaultMaxAttempts, and TimeoutSeconds to no timeout.
+// DefaultMaxAttempts, TimeoutSeconds to no timeout, and Priority to 0.
 type EnqueueParams struct {
 	Type           string
 	Payload        json.RawMessage
 	Queue          string
+	Priority       *int
 	RunAt          *time.Time
 	MaxAttempts    *int
 	TimeoutSeconds *int

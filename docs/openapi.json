@@ -66,6 +66,13 @@
           "payload": {
             "description": "Arbitrary JSON handed to the handler. Defaults to `{}`."
           },
+          "priority": {
+            "default": 0,
+            "description": "Claim priority; higher is claimed first. `run_at` breaks ties. Defaults to 0.\n",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
           "queue": {
             "default": "default",
             "description": "Queue name. Defaults to `default`.",
@@ -142,6 +149,11 @@
           "payload": {
             "description": "Arbitrary JSON handed to the handler. Defaults to `{}`."
           },
+          "priority": {
+            "description": "Claim priority; higher numbers are claimed first, with `run_at` breaking ties. Always present on a stored job.\n",
+            "example": 5,
+            "type": "integer"
+          },
           "queue": {
             "example": "default",
             "type": "string"
@@ -171,6 +183,7 @@
           "type",
           "payload",
           "queue",
+          "priority",
           "status",
           "attempts",
           "max_attempts",

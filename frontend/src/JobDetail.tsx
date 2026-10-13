@@ -63,6 +63,8 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
             <dd>{job.type}</dd>
             <dt>Queue</dt>
             <dd>{job.queue}</dd>
+            <dt>Priority</dt>
+            <dd>{job.priority}</dd>
             <dt>Attempts</dt>
             <dd>
               {job.attempts} / {job.max_attempts}

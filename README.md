@@ -183,6 +183,11 @@ drifts).
   claim.
 - **Bounded retries with backoff** — each failure pushes `run_at` further out;
   a job that exhausts `max_attempts` moves to `dead`.
+- **Per-job execution timeouts** — a `timeout_seconds` on the job bounds a
+  single attempt; the worker cancels the handler when it fires and records the
+  attempt as failed.
+- **Priority ordering** — a `priority` on the job (default 0) decides claim
+  order: higher priority is claimed first, with `run_at` breaking ties.
 - **No strict global ordering** — jobs are independent; serialize inside a
   handler or use one worker per queue if order matters.
 - **Graceful shutdown** — stop claiming, drain in-flight jobs, exit cleanly.

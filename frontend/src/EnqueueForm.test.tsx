@@ -20,6 +20,7 @@ const created: Job = {
   type: "echo",
   payload: { n: 1 },
   queue: "critical",
+  priority: 0,
   status: "pending",
   attempts: 0,
   max_attempts: 5,
@@ -56,6 +57,7 @@ describe("EnqueueForm", () => {
     render(<EnqueueForm onEnqueued={onEnqueued} onError={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("Queue"), { target: { value: "critical" } });
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "7" } });
     fireEvent.change(screen.getByLabelText("Payload (JSON)"), { target: { value: '{"n":1}' } });
     fireEvent.change(screen.getByLabelText("Max attempts"), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Timeout (s)"), { target: { value: "30" } });
@@ -69,6 +71,7 @@ describe("EnqueueForm", () => {
       type: "echo",
       payload: { n: 1 },
       queue: "critical",
+      priority: 7,
       max_attempts: 5,
       timeout_seconds: 30,
     });
@@ -134,6 +137,19 @@ describe("EnqueueForm", () => {
     await user.click(screen.getByRole("button", { name: "Enqueue job" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/valid JSON/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a priority above the int4 range without calling the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Priority"), { target: { value: "2147483648" } });
+    await user.click(screen.getByRole("button", { name: "Enqueue job" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/at most 2147483647/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

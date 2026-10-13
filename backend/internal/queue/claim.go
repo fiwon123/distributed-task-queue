@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,7 +55,8 @@ WHERE status = 'running'
 // lease ($3 seconds) expires, and counts the attempt. A job is due when it is
 // pending/failed and run_at has passed, or when it is running under an expired
 // lease (reclaim). SKIP LOCKED lets concurrent claimers pass over rows already
-// locked by another worker instead of blocking.
+// locked by another worker instead of blocking. Due jobs are claimed highest
+// priority first, with run_at breaking ties.
 const claimSQL = `
 WITH due AS (
     SELECT id
@@ -65,7 +67,7 @@ WITH due AS (
             (status IN ('pending', 'failed') AND run_at <= now())
          OR (status = 'running' AND locked_until <= now())
       )
-    ORDER BY run_at
+    ORDER BY priority DESC, run_at
     FOR UPDATE SKIP LOCKED
     LIMIT $2
 )
@@ -75,9 +77,9 @@ SET status       = 'running',
     locked_until = now() + make_interval(secs => $3::double precision)
 FROM due
 WHERE j.id = due.id
-RETURNING j.id::text, j.type, j.payload, j.queue, j.status, j.attempts,
-          j.max_attempts, j.timeout_seconds, j.run_at, j.locked_until,
-          j.last_error, j.created_at, j.completed_at`
+RETURNING j.id::text, j.type, j.payload, j.queue, j.priority, j.status,
+          j.attempts, j.max_attempts, j.timeout_seconds, j.run_at,
+          j.locked_until, j.last_error, j.created_at, j.completed_at`
 
 // Claim marks up to Limit due jobs running and returns them. It is safe to run
 // concurrently from many workers: FOR UPDATE SKIP LOCKED guarantees no job is
@@ -113,6 +115,21 @@ func (s *Store) Claim(ctx context.Context, p ClaimParams) ([]Job, error) {
 		return nil, err
 	}
 
+	// The UPDATE that backs claimSQL returns rows in an unspecified order — only
+	// the SET of claimed rows is guaranteed by the CTE's ORDER BY + LIMIT (that
+	// is what decides which due jobs win). Restore the documented order here so
+	// callers see highest priority first, run_at breaking ties; id is a final
+	// tie-break so the order is fully deterministic.
+	sort.SliceStable(jobs, func(i, j int) bool {
+		if jobs[i].Priority != jobs[j].Priority {
+			return jobs[i].Priority > jobs[j].Priority
+		}
+		if !jobs[i].RunAt.Equal(jobs[j].RunAt) {
+			return jobs[i].RunAt.Before(jobs[j].RunAt)
+		}
+		return jobs[i].ID < jobs[j].ID
+	})
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit claim: %w", err)
 	}
@@ -125,8 +142,9 @@ SET status       = 'completed',
     locked_until = NULL,
     completed_at = now()
 WHERE id = $1 AND status = 'running' AND locked_until = $2
-RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
+RETURNING id::text, type, payload, queue, priority, status, attempts,
+          max_attempts, timeout_seconds, run_at, locked_until, last_error,
+          created_at, completed_at`
 
 // Complete marks a claimed job completed. fence is the locked_until the worker
 // got from Claim; if the lease was reclaimed the update matches no row and
@@ -143,8 +161,9 @@ SET status       = CASE WHEN attempts >= max_attempts THEN 'dead' ELSE 'failed' 
     locked_until = NULL,
     completed_at = CASE WHEN attempts >= max_attempts THEN now() ELSE NULL END
 WHERE id = $1 AND status = 'running' AND locked_until = $2
-RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
+RETURNING id::text, type, payload, queue, priority, status, attempts,
+          max_attempts, timeout_seconds, run_at, locked_until, last_error,
+          created_at, completed_at`
 
 // Fail records a failed attempt. While the job has attempts left it is
 // rescheduled for RetryAt; once attempts reach max_attempts it is dead-lettered.

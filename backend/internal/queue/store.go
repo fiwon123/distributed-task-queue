@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -60,14 +61,26 @@ func normalize(p EnqueueParams) (EnqueueParams, error) {
 		return EnqueueParams{}, &ValidationError{Message: "timeout_seconds must not be negative"}
 	}
 
+	if p.Priority == nil {
+		n := 0
+		p.Priority = &n
+	} else if *p.Priority < 0 {
+		return EnqueueParams{}, &ValidationError{Message: "priority must not be negative"}
+	} else if *p.Priority > math.MaxInt32 {
+		// The column is int4; anything larger would fail at the DB with an
+		// opaque range error. Reject it here so the client gets a 400, not a 500.
+		return EnqueueParams{}, &ValidationError{Message: "priority must be at most 2147483647"}
+	}
+
 	return p, nil
 }
 
 const enqueueSQL = `
-INSERT INTO jobs (type, payload, queue, run_at, max_attempts, timeout_seconds)
-VALUES ($1, $2, $3, COALESCE($4, now()), $5, $6)
-RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
+INSERT INTO jobs (type, payload, queue, priority, run_at, max_attempts, timeout_seconds)
+VALUES ($1, $2, $3, $4, COALESCE($5, now()), $6, $7)
+RETURNING id::text, type, payload, queue, priority, status, attempts,
+          max_attempts, timeout_seconds, run_at, locked_until, last_error,
+          created_at, completed_at`
 
 // Enqueue inserts a new pending job and returns the stored row. A requested
 // run_at in the past is allowed; the job is immediately claimable.
@@ -77,12 +90,12 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams) (Job, error) {
 		return Job{}, err
 	}
 	row := s.pool.QueryRow(ctx, enqueueSQL,
-		p.Type, []byte(p.Payload), p.Queue, p.RunAt, *p.MaxAttempts, p.TimeoutSeconds)
+		p.Type, []byte(p.Payload), p.Queue, p.Priority, p.RunAt, *p.MaxAttempts, p.TimeoutSeconds)
 	return scanJob(row)
 }
 
 const getSQL = `
-SELECT id::text, type, payload, queue, status, attempts, max_attempts,
+SELECT id::text, type, payload, queue, priority, status, attempts, max_attempts,
        timeout_seconds, run_at, locked_until, last_error, created_at, completed_at
 FROM jobs
 WHERE id = $1`
@@ -105,7 +118,7 @@ func scanJob(row rowScanner) (Job, error) {
 		status  string
 	)
 	err := row.Scan(
-		&j.ID, &j.Type, &payload, &j.Queue, &status, &j.Attempts,
+		&j.ID, &j.Type, &payload, &j.Queue, &j.Priority, &status, &j.Attempts,
 		&j.MaxAttempts, &j.TimeoutSeconds, &j.RunAt, &j.LockedUntil,
 		&j.LastError, &j.CreatedAt, &j.CompletedAt,
 	)
@@ -129,8 +142,9 @@ SET status       = 'pending',
     last_error   = NULL,
     completed_at = NULL
 WHERE id = $1 AND status IN ('dead', 'failed')
-RETURNING id::text, type, payload, queue, status, attempts, max_attempts,
-          timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
+RETURNING id::text, type, payload, queue, priority, status, attempts,
+          max_attempts, timeout_seconds, run_at, locked_until, last_error,
+          created_at, completed_at`
 
 // Requeue returns a dead or failed job to the queue with a fresh retry budget:
 // status pending, attempts reset to 0, lease and error cleared, run_at now.

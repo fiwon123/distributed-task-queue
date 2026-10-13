@@ -38,8 +38,9 @@ func (p ListParams) normalize() (ListParams, error) {
 	return p, nil
 }
 
-const listJobsColumns = `id::text, type, payload, queue, status, attempts, max_attempts,
-       timeout_seconds, run_at, locked_until, last_error, created_at, completed_at`
+const listJobsColumns = `id::text, type, payload, queue, priority, status, attempts,
+       max_attempts, timeout_seconds, run_at, locked_until, last_error,
+       created_at, completed_at`
 
 // ListJobs returns jobs newest first, filtered by queue and/or status.
 func (s *Store) ListJobs(ctx context.Context, p ListParams) ([]Job, error) {
