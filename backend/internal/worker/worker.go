@@ -232,9 +232,10 @@ func (w *Worker) process(ctx context.Context, workerID int, job queue.Job) {
 
 	// A fired deadline is a failure even when the handler returned nil: a
 	// handler that ignores ctx and finishes anyway still overran its budget, and
-	// completing the job would hide that. No timeout means jobCtx can never be
-	// DeadlineExceeded.
-	if jobCtx.Err() == context.DeadlineExceeded {
+	// completing the job would hide that. No timeout means jobCtx cannot be
+	// DeadlineExceeded, and the guard keeps the pointer dereference obviously
+	// safe.
+	if job.TimeoutSeconds != nil && jobCtx.Err() == context.DeadlineExceeded {
 		runErr = fmt.Errorf("execution timed out after %d seconds", *job.TimeoutSeconds)
 	}
 	if runErr != nil {

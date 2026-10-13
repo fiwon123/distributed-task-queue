@@ -264,7 +264,7 @@ func TestProcessTimeoutFailsAttemptEvenIfHandlerIgnoresCtx(t *testing.T) {
 	store := &fakeStore{}
 	w := New(store, map[string]Handler{
 		"stubborn": func(context.Context, queue.Job) error {
-			time.Sleep(1200 * time.Millisecond)
+			time.Sleep(2000 * time.Millisecond)
 			return nil
 		},
 	}, Config{Lease: 30 * time.Second}, discardLogger())
