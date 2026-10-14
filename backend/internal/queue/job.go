@@ -5,6 +5,7 @@ package queue
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -83,3 +84,8 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string { return e.Message }
+
+var (
+	// ErrJobRunning is returned when a job is running and cannot be deleted.
+	ErrJobRunning = errors.New("job is running")
+)
