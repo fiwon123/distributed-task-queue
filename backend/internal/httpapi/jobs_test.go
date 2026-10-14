@@ -630,3 +630,7 @@ func TestDashboardDoesNotShadowAPIRoutes(t *testing.T) {
 		t.Errorf("API response expected, got %s", w.Body.String())
 	}
 }
+
+func (f *fakeStore) Ping(ctx context.Context) error {
+	return nil
+}

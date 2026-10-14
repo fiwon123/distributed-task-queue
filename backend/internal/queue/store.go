@@ -237,3 +237,8 @@ func (s *Store) QueueStats(ctx context.Context, queueName string) (Stats, error)
 	}
 	return stats, nil
 }
+
+// Ping reports whether the database is reachable.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}

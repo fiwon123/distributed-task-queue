@@ -319,7 +319,7 @@
     "license": {
       "name": "Educational project — not production-ready"
     },
-    "title": "Distributed Task Queue API",
+    "title": "distributed-task-queue API",
     "version": "0.1.0"
   },
   "openapi": "3.0.3",

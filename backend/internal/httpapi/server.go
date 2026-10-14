@@ -25,6 +25,7 @@ type JobStore interface {
 	QueueStats(ctx context.Context, queue string) (queue.Stats, error)
 	ListJobs(ctx context.Context, p queue.ListParams) ([]queue.Job, error)
 	ListQueues(ctx context.Context) ([]queue.QueueInfo, error)
+	Ping(ctx context.Context) error
 }
 
 // Server serves the /v1 HTTP API and, when a dashboard is configured, the
@@ -91,6 +92,8 @@ func (s *Server) Handler() http.Handler {
 	for _, rt := range s.routes() {
 		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler)
 	}
+	mux.HandleFunc("GET /healthz", s.handleHealth)
+	mux.HandleFunc("GET /readyz", s.handleReady)
 	if s.apiDocs != nil {
 		mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
 		mux.HandleFunc("GET /openapi.json", s.handleOpenAPIJSON)
@@ -105,6 +108,22 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("/", s.spaHandler())
 	}
 	return mux
+}
+
+
+// handleHealth is a liveness probe.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleReady is a readiness probe that checks DB connectivity.
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Ping(r.Context()); err != nil {
+		s.log.Error("readiness ping failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // handleOpenAPISpec serves the embedded OpenAPI document.
