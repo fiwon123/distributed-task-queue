@@ -91,6 +91,7 @@ func (s *Server) routes() []route {
 		{http.MethodDelete, "/v1/queues/{name}/jobs", s.handlePurgeTerminal},
 		{http.MethodPost, "/v1/queues/{name}/requeue-dead", s.handleRequeueDead},
 		{http.MethodGet, "/v1/queues/{name}/stats", s.handleQueueStats},
+		{http.MethodGet, "/v1/workers", s.handleListWorkers},
 	}
 }
 

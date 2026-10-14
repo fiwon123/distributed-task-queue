@@ -34,6 +34,8 @@ tags:
     description: Enqueue jobs and inspect or requeue them.
   - name: queues
     description: Queue-level listings and statistics.
+  - name: workers
+    description: Registered worker processes and their heartbeats.
 
 paths:
   /v1/jobs:
@@ -268,6 +270,26 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /v1/workers:
+    get:
+      operationId: listWorkers
+      summary: List registered workers
+      description: Returns the registered workers with their heartbeat metadata.
+      tags: [workers]
+      responses:
+        '200':
+          description: List of workers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [workers]
+                properties:
+                  workers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkerInfo'
 
 components:
   parameters:
@@ -520,6 +542,41 @@ components:
           type: integer
           minimum: 0
           description: Number of dead-lettered jobs returned to `pending`.
+
+    WorkerInfo:
+      type: object
+      required: [id, name, queues, types, concurrency, started_at, last_seen_at, alive]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Human-readable worker name.
+        queues:
+          type: array
+          items:
+            type: string
+          description: Queues this worker polls (empty means all).
+        types:
+          type: array
+          items:
+            type: string
+          description: Job types this worker can handle.
+        concurrency:
+          type: integer
+          description: Number of jobs the worker runs at once.
+          example: 4
+        started_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Time of the most recent heartbeat.
+        alive:
+          type: boolean
+          description: Whether the last heartbeat is recent enough to consider the worker alive.
 
     Error:
       type: object
