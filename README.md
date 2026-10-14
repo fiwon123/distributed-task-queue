@@ -9,11 +9,19 @@
 <p align="center">
   <a href="https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml"><img src="https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26-blue" alt="Go Version"></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-17-4169E1" alt="PostgreSQL 17"></a>
+  <a href="https://swagger.io/specification/"><img src="https://img.shields.io/badge/OpenAPI-3.0-6BA539" alt="OpenAPI 3.0"></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB" alt="React 19"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/fiwon123/distributed-task-queue/stargazers"><img src="https://img.shields.io/github/stars/fiwon123/distributed-task-queue?style=flat&logo=github&label=stars" alt="GitHub stars"></a>
+  <a href="https://github.com/fiwon123/distributed-task-queue/issues"><img src="https://img.shields.io/github/issues/fiwon123/distributed-task-queue" alt="GitHub issues"></a>
+  <a href="https://github.com/fiwon123/distributed-task-queue/commits/dev"><img src="https://img.shields.io/github/last-commit/fiwon123/distributed-task-queue" alt="Last commit"></a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console-dark.png" alt="Distributed Task Queue console (dark)" width="900">
+  <img src="docs/screenshots/console-dark.png" alt="Distributed Task Queue console (dark)">
 </p>
 
 

@@ -1,6 +1,6 @@
 # Screenshots (dark mode)
 
-These screenshots were generated using the scripted Playwright capture (mocked /v1 API) against `frontend/dist` with `data-theme="dark"`. To regenerate:
+These screenshots were generated using the scripted Playwright capture (mocked /v1 API) against `frontend/dist` with `data-theme="dark"`, captured at 960 CSS px @2× (deviceScaleFactor 2) with per-page height caps (About is the top-section crop). To regenerate:
 
 ```bash
 make screenshots
