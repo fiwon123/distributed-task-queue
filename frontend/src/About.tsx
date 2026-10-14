@@ -177,20 +177,13 @@ export default function About() {
         aria-label="Request path: client to HTTP API to PostgreSQL, with a worker pool"
       >
         <span className="step-name">Client</span>
-        <span className="sep">→</span>
+        <span className="sep">-</span>
         <span className="step-name">HTTP API</span>
-        <span className="sep">→</span>
+        <span className="sep">-</span>
         <span className="step-name">PostgreSQL</span>
         <span className="sep">↔</span>
         <span className="step-name">Worker pool</span>
       </div>
-      <p className="muted" style={{ marginTop: "0.5rem" }}>
-        <strong>Mapping to components:</strong> producers → <code>POST /v1/jobs</code>; queue →{" "}
-        <code>jobs</code> table (in Postgres); workers → in-process goroutine pool; result backend →
-        the same <code>jobs</code> table (<code>status</code>, <code>last_error</code>, timestamps);
-        broker → none (uses <code>FOR UPDATE SKIP LOCKED</code>); scheduler → <code>run_at</code>;
-        monitoring → <code>GET /v1/queues/{name}/stats</code> and the web console.
-      </p>
 
       <h3>How it works</h3>
       <ol className="steps">
@@ -234,25 +227,25 @@ export default function About() {
       >
         <div className="state-row">
           <span className="state">pending</span>
-          <span className="arrow">→</span>
+          <span className="arrow">-</span>
           <span className="state">running</span>
-          <span className="arrow">→</span>
+          <span className="arrow">-</span>
           <span className="state success">completed</span>
         </div>
         <div className="state-row">
           <span className="state">running</span>
-          <span className="arrow">→</span>
+          <span className="arrow">-</span>
           <span className="state warn">failed</span>
           <span className="arrow">↻</span>
           <span className="state">pending</span>
-          <span className="arrow">→</span>
+          <span className="arrow">-</span>
           <span className="state">running</span>
-          <span className="arrow">→</span>
+          <span className="arrow">-</span>
           <span className="state danger">dead</span>
         </div>
         <div className="state-row">
           <span className="state danger">dead</span>
-          <span className="arrow">→</span>
+          <span className="arrow">-</span>
           <span className="state">pending</span>
           <span className="arrow">(requeue)</span>
         </div>

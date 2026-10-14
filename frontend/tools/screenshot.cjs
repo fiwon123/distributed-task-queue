@@ -182,8 +182,8 @@ async function capture() {
   const server = staticServer(port);
   const browser = await launchBrowser();
   const page = await browser.newPage({
-    viewport: { width: 1440, height: 900 },
-    deviceScaleFactor: 1.5,
+    viewport: { width: 960, height: 820 },
+    deviceScaleFactor: 2,
   });
   await page.addInitScript(() => {
     try {
@@ -192,14 +192,18 @@ async function capture() {
   });
   const base = "http://localhost:" + port;
   const shots = [
-    { name: "console-dark.png", path: "/" },
-    { name: "job-detail-dark.png", path: "/jobs/j_9xk2" },
-    { name: "workbench-dark.png", path: "/workbench" },
-    { name: "about-dark.png", path: "/about" },
+    { name: "console-dark.png", path: "/", height: 1100 },
+    { name: "job-detail-dark.png", path: "/jobs/j_9xk2", height: 880 },
+    { name: "workbench-dark.png", path: "/workbench", height: 800 },
+    { name: "about-dark.png", path: "/about", height: 900 },
   ];
   for (const s of shots) {
     await page.goto(base + s.path, { waitUntil: "networkidle" });
-    await page.screenshot({ path: join(outDir, s.name), fullPage: true });
+    try {
+      const h = s.height || 900;
+      await page.setViewportSize({ width: 960, height: h });
+    } catch {}
+    await page.screenshot({ path: join(outDir, s.name), fullPage: false });
   }
   await browser.close();
   server.close();
