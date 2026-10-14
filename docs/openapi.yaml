@@ -122,6 +122,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteJob
+      tags: [jobs]
+      summary: Delete a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '204':
+          description: Job deleted.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   /v1/jobs/{id}/requeue:
     post:
@@ -192,6 +209,36 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /v1/queues/{name}/jobs:
+    delete:
+      operationId: purgeTerminalJobs
+      tags: [queues]
+      summary: Purge terminal jobs in a queue
+      parameters:
+        - $ref: '#/components/parameters/QueueName'
+        - name: status
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/JobStatus'
+        - name: before
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurgeResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /v1/queues/{name}/requeue-dead:
     post:
       operationId: requeueDeadJobs
@@ -232,6 +279,14 @@ components:
       schema:
         type: string
         format: uuid
+
+    QueueName:
+      name: name
+      in: path
+      required: true
+      description: Queue name.
+      schema:
+        type: string
 
   responses:
     BadRequest:
@@ -388,6 +443,18 @@ components:
         count:
           type: integer
           description: Number of jobs in this page (not the total in the queue).
+        next:
+          description: Cursor for next page or null
+          anyOf:
+            - type: object
+              required: [before_created_at, before_id]
+              properties:
+                before_created_at:
+                  type: string
+                  format: date-time
+                before_id:
+                  type: string
+            - type: null
 
     QueueInfo:
       type: object
@@ -429,6 +496,18 @@ components:
               type: integer
         total:
           type: integer
+
+    PurgeResult:
+      type: object
+      required: [queue, status, deleted]
+      properties:
+        queue:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        deleted:
+          type: integer
+          minimum: 0
 
     RequeueDeadResult:
       type: object
