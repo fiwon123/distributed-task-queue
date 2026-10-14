@@ -1,8 +1,12 @@
-# distributed-task-queue
+# Distributed Task Queue
 
 A durable, PostgreSQL-backed distributed task queue built from scratch in Go.
 Producers enqueue jobs over HTTP; one or more workers pull them from the
 database, run them, and survive crashes without losing work.
+
+[![CI](https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml/badge.svg)](https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Educational project — not production-ready.** There is no TLS, no
 > authentication, and no operational hardening. The goal is to understand how a
@@ -17,6 +21,36 @@ shared database so that work outlives the workers running it: a job claimed by a
 worker that then died becomes runnable again, retries are bounded, and failed
 jobs land somewhere inspectable instead of vanishing.
 
+## Table of contents
+
+- [Problem](#problem)
+- [What you can do](#what-you-can-do)
+- [Screenshots](#screenshots)
+- [Quickstart](#quickstart)
+- [Architecture](#architecture)
+- [Concepts & how it works](#concepts--how-it-works)
+- [API](#api)
+- [API reference](#api-reference)
+- [Design choices](#design-choices)
+- [Build order](#build-order)
+- [Development](#development)
+- [Building the dashboard](#building-the-dashboard)
+- [License](#license)
+- [Contributing](#contributing)
+- [Changelog](#changelog)
+
+
+## Screenshots
+
+> Screenshots are generated with mocked data (dark mode). To regenerate locally: `make screenshots`. If the headless environment lacks a display server, regenerate on a host with a browser/display.
+
+| Screen | What it shows |
+|---|---|
+| ![Console (dark)](docs/screenshots/console-dark.png) | Jobs console: queues, job list (status/priority/type), enqueue form. |
+| ![Job detail (dark)](docs/screenshots/job-detail-dark.png) | Live job detail showing attempts, lease/heartbeat context, payload, and last error. |
+| ![Workbench (dark)](docs/screenshots/workbench-dark.png) | Workbench driving the API from the served OpenAPI spec. |
+| ![About/Concepts (dark)](docs/screenshots/about-dark.png) | Concepts & how it works: theory, architecture mapping, concepts, state diagram, characteristics. |
+
 ## What you can do
 
 Once built, you can run the API and one or more workers and:
@@ -29,7 +63,7 @@ Once built, you can run the API and one or more workers and:
 - inspect dead-lettered jobs and requeue them;
 - read per-queue statistics.
 
-## Two ways to run it
+## Quickstart
 
 There are two independent Docker Compose stacks, gated behind separate Compose
 profiles. Both use the same `db` service, so run one at a time.
@@ -99,6 +133,20 @@ For a shell inside the sandbox use `make shell`; to run opencode use
 `make demo` needs `curl` on the host and is safe to run repeatedly. Because each
 stack is behind its own profile, `make prod-up` never starts the dev sandbox (and
 vice versa).
+
+## Architecture
+
+```text
+Client (curl / HTTP client)
+  ↓
+HTTP API (POST /v1/jobs, GET /v1/jobs/{id}, GET /v1/jobs, POST /v1/jobs/{id}/requeue, DELETE /v1/jobs/{id}, DELETE /v1/queues/{name}/jobs, GET /v1/queues, GET /v1/queues/{name}/stats, GET /v1/workers, /healthz, /readyz)
+  ↓
+PostgreSQL (jobs table — the queue itself: due jobs, leases, attempts, status; workers table for registry)
+  ↕
+Worker pool (claim due jobs with FOR UPDATE SKIP LOCKED, renew leases via heartbeat, run handlers, update status)
+```
+
+Key: Postgres is the queue (no external broker). Claims are atomic in a short transaction with `FOR UPDATE SKIP LOCKED`. Leases (`locked_until`) + heartbeat recover abandoned work; retries use exponential backoff; jobs that exhaust `max_attempts` move to `dead` and can be requeued.
 
 ## Status
 
@@ -263,3 +311,16 @@ they ran. CI rebuilds the bundle and fails if `frontend/dist` is stale relative 
 `frontend/src`. With the dashboard embedded, run the API and open
 <http://localhost:8080/> — the SPA falls back for unknown non-`/v1` paths, so
 client-side routes work on reload.
+
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for branch/commit conventions, testing, and PR guidelines.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
