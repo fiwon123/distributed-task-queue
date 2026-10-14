@@ -10,6 +10,15 @@
           "format": "uuid",
           "type": "string"
         }
+      },
+      "QueueName": {
+        "description": "Queue name.",
+        "in": "path",
+        "name": "name",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "responses": {
@@ -222,6 +231,26 @@
         ],
         "type": "string"
       },
+      "PurgeResult": {
+        "properties": {
+          "deleted": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "queue": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          }
+        },
+        "required": [
+          "queue",
+          "status",
+          "deleted"
+        ],
+        "type": "object"
+      },
       "QueueInfo": {
         "properties": {
           "name": {
@@ -346,6 +375,28 @@
             }
           },
           {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_created_at",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Maximum number of jobs to return. Defaults to 50; requests above the\nmaximum (500) are clamped rather than rejected.\n",
             "in": "query",
             "name": "limit",
@@ -418,6 +469,36 @@
       }
     },
     "/v1/jobs/{id}": {
+      "delete": {
+        "description": "Deletes the job if it is not currently running.",
+        "operationId": "deleteJob",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Job deleted."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Delete a job",
+        "tags": [
+          "jobs"
+        ]
+      },
       "get": {
         "operationId": "getJob",
         "parameters": [
@@ -505,6 +586,55 @@
           }
         },
         "summary": "List queues",
+        "tags": [
+          "queues"
+        ]
+      }
+    },
+    "/v1/queues/{name}/jobs": {
+      "delete": {
+        "description": "Deletes completed/failed/dead jobs in the queue, optionally before a timestamp.",
+        "operationId": "purgeTerminalJobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/QueueName"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobStatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgeResult"
+                }
+              }
+            },
+            "description": "Purge result."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Purge terminal jobs in a queue",
         "tags": [
           "queues"
         ]
