@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Listing limits. A request may ask for fewer; a request for more is clamped
@@ -14,18 +15,32 @@ const (
 )
 
 // ListParams filters a job listing. All fields are optional: an empty Queue or
-// Status matches everything, and a zero Limit means DefaultListLimit.
+// Status matches everything, and a zero Limit means DefaultListLimit. Type
+// filters by exact job type. BeforeCreatedAt and BeforeID are used together
+// for keyset pagination (returns jobs created before that cursor, in descending
+// order of created_at,id).
 type ListParams struct {
-	Queue  string
-	Status Status
-	Limit  int
+	Queue           string
+	Status          Status
+	Type            string
+	Limit           int
+	BeforeCreatedAt *time.Time
+	BeforeID        string
 }
 
 // normalize validates a list request and fills in its defaults.
 func (p ListParams) normalize() (ListParams, error) {
 	p.Queue = strings.TrimSpace(p.Queue)
+	p.Type = strings.TrimSpace(p.Type)
+	p.BeforeID = strings.TrimSpace(p.BeforeID)
 	if p.Status != "" && !p.Status.Valid() {
 		return ListParams{}, &ValidationError{Message: fmt.Sprintf("unknown status %q", p.Status)}
+	}
+	if p.BeforeID != "" && p.BeforeCreatedAt == nil {
+		return ListParams{}, &ValidationError{Message: "before_id requires before_created_at"}
+	}
+	if p.BeforeCreatedAt != nil && p.BeforeID == "" {
+		return ListParams{}, &ValidationError{Message: "before_created_at requires before_id"}
 	}
 	switch {
 	case p.Limit == 0:
@@ -60,6 +75,15 @@ func (s *Store) ListJobs(ctx context.Context, p ListParams) ([]Job, error) {
 	if p.Status != "" {
 		args = append(args, p.Status)
 		where = append(where, fmt.Sprintf("status = $%d", len(args)))
+	}
+	if p.Type != "" {
+		args = append(args, p.Type)
+		where = append(where, fmt.Sprintf("type = $%d", len(args)))
+	}
+	if p.BeforeCreatedAt != nil && p.BeforeID != "" {
+		args = append(args, p.BeforeCreatedAt)
+		where = append(where, fmt.Sprintf("(created_at, id::uuid) < ($%d, $%d::uuid)", len(args), len(args)+1))
+		args = append(args, p.BeforeID)
 	}
 
 	var sb strings.Builder
