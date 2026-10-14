@@ -24,22 +24,114 @@ function fixtures() {
   return {
     "/v1/queues": {
       queues: [
-        { name: "default", jobs: { total: 7, pending: 2, running: 1, completed: 3, failed: 1, dead: 1 } },
-        { name: "emails", jobs: { total: 2, pending: 1, running: 0, completed: 1, failed: 0, dead: 0 } },
+        {
+          name: "default",
+          jobs: { total: 7, pending: 2, running: 1, completed: 3, failed: 1, dead: 1 },
+        },
+        {
+          name: "emails",
+          jobs: { total: 2, pending: 1, running: 0, completed: 1, failed: 0, dead: 0 },
+        },
       ],
     },
-    "/v1/queues/default/stats": { queue: "default", jobs: { total: 7, pending: 2, running: 1, completed: 3, failed: 1, dead: 1 } },
-    "/v1/queues/emails/stats": { queue: "emails", jobs: { total: 2, pending: 1, running: 0, completed: 1, failed: 0, dead: 0 } },
+    "/v1/queues/default/stats": {
+      queue: "default",
+      jobs: { total: 7, pending: 2, running: 1, completed: 3, failed: 1, dead: 1 },
+    },
+    "/v1/queues/emails/stats": {
+      queue: "emails",
+      jobs: { total: 2, pending: 1, running: 0, completed: 1, failed: 0, dead: 0 },
+    },
     "/v1/jobs": {
       jobs: [
-        { id: "j_9xk2", queue: "default", type: "send_email", status: "running", priority: 10, attempts: 1, max_attempts: 5, run_at: new Date(now - 30000).toISOString(), locked_until: new Date(now + 120000).toISOString(), created_at: new Date(now - 300000).toISOString(), last_error: "", payload: { to: "alice@example.com", subject: "Welcome" } },
-        { id: "j_7ab4", queue: "default", type: "report", status: "pending", priority: 0, attempts: 0, max_attempts: 3, run_at: new Date(now - 5000).toISOString(), locked_until: null, created_at: new Date(now - 120000).toISOString(), last_error: "", payload: { range: "7d" } },
-        { id: "j_3t9m", queue: "default", type: "report", status: "failed", priority: 0, attempts: 2, max_attempts: 3, run_at: new Date(now + 60000).toISOString(), locked_until: null, created_at: new Date(now - 600000).toISOString(), completed_at: null, last_error: "timeout while calling upstream", payload: { range: "30d" } },
-        { id: "j_2r8f", queue: "default", type: "cleanup", status: "dead", priority: -1, attempts: 3, max_attempts: 3, run_at: new Date(now - 100000).toISOString(), locked_until: null, created_at: new Date(now - 1800000).toISOString(), last_error: "permanent failure", payload: { days: 30 } },
-        { id: "j_5h1p", queue: "emails", type: "send_email", status: "completed", priority: 5, attempts: 1, max_attempts: 3, run_at: new Date(now - 200000).toISOString(), locked_until: null, created_at: new Date(now - 240000).toISOString(), completed_at: new Date(now - 180000).toISOString(), last_error: "", payload: { to: "bob@example.com" } },
+        {
+          id: "j_9xk2",
+          queue: "default",
+          type: "send_email",
+          status: "running",
+          priority: 10,
+          attempts: 1,
+          max_attempts: 5,
+          run_at: new Date(now - 30000).toISOString(),
+          locked_until: new Date(now + 120000).toISOString(),
+          created_at: new Date(now - 300000).toISOString(),
+          last_error: "",
+          payload: { to: "alice@example.com", subject: "Welcome" },
+        },
+        {
+          id: "j_7ab4",
+          queue: "default",
+          type: "report",
+          status: "pending",
+          priority: 0,
+          attempts: 0,
+          max_attempts: 3,
+          run_at: new Date(now - 5000).toISOString(),
+          locked_until: null,
+          created_at: new Date(now - 120000).toISOString(),
+          last_error: "",
+          payload: { range: "7d" },
+        },
+        {
+          id: "j_3t9m",
+          queue: "default",
+          type: "report",
+          status: "failed",
+          priority: 0,
+          attempts: 2,
+          max_attempts: 3,
+          run_at: new Date(now + 60000).toISOString(),
+          locked_until: null,
+          created_at: new Date(now - 600000).toISOString(),
+          completed_at: null,
+          last_error: "timeout while calling upstream",
+          payload: { range: "30d" },
+        },
+        {
+          id: "j_2r8f",
+          queue: "default",
+          type: "cleanup",
+          status: "dead",
+          priority: -1,
+          attempts: 3,
+          max_attempts: 3,
+          run_at: new Date(now - 100000).toISOString(),
+          locked_until: null,
+          created_at: new Date(now - 1800000).toISOString(),
+          last_error: "permanent failure",
+          payload: { days: 30 },
+        },
+        {
+          id: "j_5h1p",
+          queue: "emails",
+          type: "send_email",
+          status: "completed",
+          priority: 5,
+          attempts: 1,
+          max_attempts: 3,
+          run_at: new Date(now - 200000).toISOString(),
+          locked_until: null,
+          created_at: new Date(now - 240000).toISOString(),
+          completed_at: new Date(now - 180000).toISOString(),
+          last_error: "",
+          payload: { to: "bob@example.com" },
+        },
       ],
     },
-    "/v1/jobs/j_9xk2": { id: "j_9xk2", queue: "default", type: "send_email", status: "running", priority: 10, attempts: 1, max_attempts: 5, run_at: new Date(now - 30000).toISOString(), locked_until: new Date(now + 120000).toISOString(), created_at: new Date(now - 300000).toISOString(), last_error: "", payload: { to: "alice@example.com", subject: "Welcome" } },
+    "/v1/jobs/j_9xk2": {
+      id: "j_9xk2",
+      queue: "default",
+      type: "send_email",
+      status: "running",
+      priority: 10,
+      attempts: 1,
+      max_attempts: 5,
+      run_at: new Date(now - 30000).toISOString(),
+      locked_until: new Date(now + 120000).toISOString(),
+      created_at: new Date(now - 300000).toISOString(),
+      last_error: "",
+      payload: { to: "alice@example.com", subject: "Welcome" },
+    },
     "/v1/workers": { workers: [] },
   };
 }
@@ -73,9 +165,15 @@ function staticServer(port) {
 async function launchBrowser() {
   const { chromium } = require("playwright");
   try {
-    return await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
-  } catch (e) {
-    return await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-setuid-sandbox"] });
+    return await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    });
+  } catch {
+    return await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-setuid-sandbox"],
+    });
   }
 }
 
@@ -83,8 +181,15 @@ async function capture() {
   const port = 5181;
   const server = staticServer(port);
   const browser = await launchBrowser();
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
-  await page.addInitScript(() => { try { localStorage.setItem("dtq-theme", "dark"); } catch (e) {} });
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 1.5,
+  });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("dtq-theme", "dark");
+    } catch {}
+  });
   const base = "http://localhost:" + port;
   const shots = [
     { name: "console-dark.png", path: "/" },
@@ -101,4 +206,7 @@ async function capture() {
   console.log("done");
 }
 
-capture().catch((e) => { console.error(e); process.exit(1); });
+capture().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
