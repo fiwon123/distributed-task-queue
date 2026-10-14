@@ -18,11 +18,13 @@ const maxBodyBytes = 1 << 20
 
 // enqueueRequest is the JSON body of POST /v1/jobs.
 type enqueueRequest struct {
-	Type        string          `json:"type"`
-	Payload     json.RawMessage `json:"payload"`
-	Queue       string          `json:"queue"`
-	RunAt       *time.Time      `json:"run_at"`
-	MaxAttempts *int            `json:"max_attempts"`
+	Type           string          `json:"type"`
+	Payload        json.RawMessage `json:"payload"`
+	Queue          string          `json:"queue"`
+	Priority       *int            `json:"priority"`
+	RunAt          *time.Time      `json:"run_at"`
+	MaxAttempts    *int            `json:"max_attempts"`
+	TimeoutSeconds *int            `json:"timeout_seconds"`
 }
 
 // handleEnqueue implements POST /v1/jobs.
@@ -40,11 +42,13 @@ func (s *Server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job, err := s.store.Enqueue(r.Context(), queue.EnqueueParams{
-		Type:        req.Type,
-		Payload:     req.Payload,
-		Queue:       req.Queue,
-		RunAt:       req.RunAt,
-		MaxAttempts: req.MaxAttempts,
+		Type:           req.Type,
+		Payload:        req.Payload,
+		Queue:          req.Queue,
+		Priority:       req.Priority,
+		RunAt:          req.RunAt,
+		MaxAttempts:    req.MaxAttempts,
+		TimeoutSeconds: req.TimeoutSeconds,
 	})
 	if err != nil {
 		var invalid *queue.ValidationError
@@ -178,14 +182,32 @@ func (s *Server) handleQueueStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
-// handleListJobs implements GET /v1/jobs?queue=&status=&limit=.
-func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	p := queue.ListParams{
-		Queue:  query.Get("queue"),
-		Status: queue.Status(query.Get("status")),
+func parseTime(s string) *time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
 	}
-	if raw := query.Get("limit"); raw != "" {
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339, s)
+		if err != nil {
+			return nil
+		}
+	}
+	return &t
+}
+
+// handleListJobs implements GET /v1/jobs?queue=&status=&type=&limit=&before_created_at=&before_id=.
+func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	p := queue.ListParams{
+		Queue:           strings.TrimSpace(q.Get("queue")),
+		Status:          queue.Status(strings.TrimSpace(q.Get("status"))),
+		Type:            strings.TrimSpace(q.Get("type")),
+		BeforeCreatedAt: parseTime(q.Get("before_created_at")),
+		BeforeID:        strings.TrimSpace(q.Get("before_id")),
+	}
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "limit must be an integer")
@@ -193,23 +215,29 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		}
 		p.Limit = n
 	}
-
 	jobs, err := s.store.ListJobs(r.Context(), p)
 	if err != nil {
-		var invalid *queue.ValidationError
-		if errors.As(err, &invalid) {
-			writeError(w, http.StatusBadRequest, invalid.Message)
+		var ve *queue.ValidationError
+		if errors.As(err, &ve) {
+			writeError(w, http.StatusBadRequest, ve.Error())
 			return
 		}
-		s.log.Error("list jobs", "error", err)
+		s.log.Error("list jobs failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs, "count": len(jobs)})
-}
-
-// handleListQueues implements GET /v1/queues.
+	resp := map[string]any{"jobs": jobs, "count": len(jobs)}
+	if len(jobs) > 0 {
+		last := jobs[len(jobs)-1]
+		resp["next"] = map[string]any{
+			"before_created_at": last.CreatedAt.Format(time.RFC3339Nano),
+			"before_id":         last.ID,
+		}
+	} else {
+		resp["next"] = nil
+	}
+	writeJSON(w, http.StatusOK, resp)
+} // handleListQueues implements GET /v1/queues.
 func (s *Server) handleListQueues(w http.ResponseWriter, r *http.Request) {
 	queues, err := s.store.ListQueues(r.Context())
 	if err != nil {
@@ -219,4 +247,67 @@ func (s *Server) handleListQueues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"queues": queues})
+}
+
+// handleDeleteJob implements DELETE /v1/jobs/{id}.
+func (s *Server) handleDeleteJob(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/v1/jobs/")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "job id required")
+		return
+	}
+	err := s.store.Delete(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, queue.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "job not found")
+			return
+		}
+		if errors.Is(err, queue.ErrJobRunning) {
+			writeError(w, http.StatusConflict, "job is running")
+			return
+		}
+		var ve *queue.ValidationError
+		if errors.As(err, &ve) {
+			writeError(w, http.StatusBadRequest, ve.Error())
+			return
+		}
+		s.log.Error("delete job failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handlePurgeTerminal implements DELETE /v1/queues/{name}/jobs.
+func (s *Server) handlePurgeTerminal(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "queue name is required")
+		return
+	}
+	status := queue.Status(strings.TrimSpace(r.URL.Query().Get("status")))
+	before := parseTime(r.URL.Query().Get("before"))
+	deleted, err := s.store.PurgeTerminal(r.Context(), name, status, before)
+	if err != nil {
+		var ve *queue.ValidationError
+		if errors.As(err, &ve) {
+			writeError(w, http.StatusBadRequest, ve.Error())
+			return
+		}
+		s.log.Error("purge terminal jobs failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"queue": name, "status": status, "deleted": deleted})
+}
+
+// handleListWorkers implements GET /v1/workers.
+func (s *Server) handleListWorkers(w http.ResponseWriter, r *http.Request) {
+	workers, err := s.store.ListWorkers(r.Context())
+	if err != nil {
+		s.log.Error("list workers failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"workers": workers})
 }

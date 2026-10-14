@@ -1,13 +1,24 @@
-# distributed-task-queue
+<h1 align="center">
+  <img src="frontend/public/favicon.svg" width="48" alt="Distributed Task Queue logo">
+  <br>
+  Distributed Task Queue
+</h1>
 
-A durable, PostgreSQL-backed distributed task queue built from scratch in Go.
-Producers enqueue jobs over HTTP; one or more workers pull them from the
-database, run them, and survive crashes without losing work.
+<p align="center">A durable, PostgreSQL-backed distributed task queue — enqueue jobs, run workers, and survive crashes without losing work.</p>
 
-> **Educational project — not production-ready.** There is no TLS, no
-> authentication, and no operational hardening. The goal is to understand how a
-> durable queue recovers abandoned work and bounds retries, not to run this in
-> front of real traffic.
+<p align="center">
+  <a href="https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml"><img src="https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26-blue" alt="Go Version"></a>
+  <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-17-4169E1" alt="PostgreSQL 17"></a>
+  <a href="https://swagger.io/specification/"><img src="https://img.shields.io/badge/OpenAPI-3.0-6BA539" alt="OpenAPI 3.0"></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB" alt="React 19"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/console-dark.png" alt="Distributed Task Queue console (dark)">
+</p>
+
 
 ## Problem
 
@@ -16,6 +27,41 @@ cannot spread load across machines. A durable queue keeps the job state in a
 shared database so that work outlives the workers running it: a job claimed by a
 worker that then died becomes runnable again, retries are bounded, and failed
 jobs land somewhere inspectable instead of vanishing.
+
+## Table of contents
+
+- [Problem](#problem)
+- [What you can do](#what-you-can-do)
+- [Screenshots](#screenshots)
+- [Quickstart](#quickstart)
+- [Architecture](#architecture)
+- [Concepts & how it works](#concepts--how-it-works)
+- [API](#api)
+- [API reference](#api-reference)
+- [Design choices](#design-choices)
+- [Build order](#build-order)
+- [Development](#development)
+- [Building the dashboard](#building-the-dashboard)
+- [License](#license)
+
+
+## Screenshots
+
+**Jobs console (dark)** — queues, job list with status/priority/type, and enqueue form.
+
+![Jobs console (dark)](docs/screenshots/console-dark.png)
+
+**Job detail (dark)** — live job detail showing attempts, lease context, payload, and last error.
+
+![Job detail (dark)](docs/screenshots/job-detail-dark.png)
+
+**Workbench (dark)** — API request runner built from the served OpenAPI spec.
+
+![Workbench (dark)](docs/screenshots/workbench-dark.png)
+
+**Concepts & how it works (dark)** — theory, architecture mapping, core concepts, job lifecycle diagram, and key characteristics.
+
+![About/Concepts (dark)](docs/screenshots/about-dark.png)
 
 ## What you can do
 
@@ -29,7 +75,7 @@ Once built, you can run the API and one or more workers and:
 - inspect dead-lettered jobs and requeue them;
 - read per-queue statistics.
 
-## Two ways to run it
+## Quickstart
 
 There are two independent Docker Compose stacks, gated behind separate Compose
 profiles. Both use the same `db` service, so run one at a time.
@@ -99,6 +145,20 @@ For a shell inside the sandbox use `make shell`; to run opencode use
 `make demo` needs `curl` on the host and is safe to run repeatedly. Because each
 stack is behind its own profile, `make prod-up` never starts the dev sandbox (and
 vice versa).
+
+## Architecture
+
+```text
+Client (curl / HTTP client)
+  ↓
+HTTP API (POST /v1/jobs, GET /v1/jobs/{id}, GET /v1/jobs, POST /v1/jobs/{id}/requeue, DELETE /v1/jobs/{id}, DELETE /v1/queues/{name}/jobs, GET /v1/queues, GET /v1/queues/{name}/stats, GET /v1/workers, /healthz, /readyz)
+  ↓
+PostgreSQL (jobs table — the queue itself: due jobs, leases, attempts, status; workers table for registry)
+  ↕
+Worker pool (claim due jobs with FOR UPDATE SKIP LOCKED, renew leases via heartbeat, run handlers, update status)
+```
+
+Key: Postgres is the queue (no external broker). Claims are atomic in a short transaction with `FOR UPDATE SKIP LOCKED`. Leases (`locked_until`) + heartbeat recover abandoned work; retries use exponential backoff; jobs that exhaust `max_attempts` move to `dead` and can be requeued.
 
 ## Status
 
@@ -177,8 +237,17 @@ drifts).
   effect but before its status update, so handlers must be idempotent.
 - **Leases for abandoned work** — a claimed job is hidden until `locked_until`;
   when a worker dies, the lease expires and the job becomes claimable again.
+  While a handler runs, its worker renews the lease (a heartbeat), so a
+  long-running job is not reclaimed mid-run — only a worker that stops
+  renewing, because it died or its shutdown drain window closed, loses its
+  claim.
 - **Bounded retries with backoff** — each failure pushes `run_at` further out;
   a job that exhausts `max_attempts` moves to `dead`.
+- **Per-job execution timeouts** — a `timeout_seconds` on the job bounds a
+  single attempt; the worker cancels the handler when it fires and records the
+  attempt as failed.
+- **Priority ordering** — a `priority` on the job (default 0) decides claim
+  order: higher priority is claimed first, with `run_at` breaking ties.
 - **No strict global ordering** — jobs are independent; serialize inside a
   handler or use one worker per queue if order matters.
 - **Graceful shutdown** — stop claiming, drain in-flight jobs, exit cleanly.
@@ -254,3 +323,9 @@ they ran. CI rebuilds the bundle and fails if `frontend/dist` is stale relative 
 `frontend/src`. With the dashboard embedded, run the API and open
 <http://localhost:8080/> — the SPA falls back for unknown non-`/v1` paths, so
 client-side routes work on reload.
+
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+

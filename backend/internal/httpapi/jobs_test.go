@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
@@ -135,7 +136,7 @@ func do(t *testing.T, store JobStore, method, target, body string) *httptest.Res
 
 func TestHandleEnqueueCreated(t *testing.T) {
 	store := &fakeStore{}
-	body := `{"type":"email","payload":{"to":"a@b.c"},"queue":"critical","max_attempts":5}`
+	body := `{"type":"email","payload":{"to":"a@b.c"},"queue":"critical","priority":9,"max_attempts":5,"timeout_seconds":30}`
 
 	w := do(t, store, http.MethodPost, "/v1/jobs", body)
 
@@ -164,8 +165,14 @@ func TestHandleEnqueueCreated(t *testing.T) {
 	if p.Type != "email" || p.Queue != "critical" {
 		t.Errorf("params type/queue = %q/%q", p.Type, p.Queue)
 	}
+	if p.Priority == nil || *p.Priority != 9 {
+		t.Errorf("priority = %v, want 9", p.Priority)
+	}
 	if p.MaxAttempts == nil || *p.MaxAttempts != 5 {
 		t.Errorf("max_attempts = %v, want 5", p.MaxAttempts)
+	}
+	if p.TimeoutSeconds == nil || *p.TimeoutSeconds != 30 {
+		t.Errorf("timeout_seconds = %v, want 30", p.TimeoutSeconds)
 	}
 	if string(p.Payload) != `{"to":"a@b.c"}` {
 		t.Errorf("payload = %s", p.Payload)
@@ -623,4 +630,23 @@ func TestDashboardDoesNotShadowAPIRoutes(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"queue":"default"`) {
 		t.Errorf("API response expected, got %s", w.Body.String())
 	}
+}
+
+func (f *fakeStore) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (f *fakeStore) Delete(ctx context.Context, id string) error { return nil }
+func (f *fakeStore) PurgeTerminal(ctx context.Context, queue string, status queue.Status, before *time.Time) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeStore) UpsertWorker(ctx context.Context, id, name string, queues, types []string, concurrency int, startedAt *time.Time) (queue.WorkerInfo, error) {
+	return queue.WorkerInfo{}, nil
+}
+func (f *fakeStore) ListWorkers(ctx context.Context) ([]queue.WorkerInfo, error) {
+	return nil, nil
+}
+func (f *fakeStore) DeleteWorker(ctx context.Context, id string) error {
+	return nil
 }

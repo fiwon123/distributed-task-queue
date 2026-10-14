@@ -5,6 +5,7 @@ package queue
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -47,29 +48,33 @@ const DefaultMaxAttempts = 3
 
 // Job is one row in the jobs table: a unit of work and its durable state.
 type Job struct {
-	ID          string          `json:"id"`
-	Type        string          `json:"type"`
-	Payload     json.RawMessage `json:"payload"`
-	Queue       string          `json:"queue"`
-	Status      Status          `json:"status"`
-	Attempts    int             `json:"attempts"`
-	MaxAttempts int             `json:"max_attempts"`
-	RunAt       time.Time       `json:"run_at"`
-	LockedUntil *time.Time      `json:"locked_until,omitempty"`
-	LastError   *string         `json:"last_error,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	CompletedAt *time.Time      `json:"completed_at,omitempty"`
+	ID             string          `json:"id"`
+	Type           string          `json:"type"`
+	Payload        json.RawMessage `json:"payload"`
+	Queue          string          `json:"queue"`
+	Priority       int             `json:"priority"`
+	Status         Status          `json:"status"`
+	Attempts       int             `json:"attempts"`
+	MaxAttempts    int             `json:"max_attempts"`
+	TimeoutSeconds *int            `json:"timeout_seconds,omitempty"`
+	RunAt          time.Time       `json:"run_at"`
+	LockedUntil    *time.Time      `json:"locked_until,omitempty"`
+	LastError      *string         `json:"last_error,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
 }
 
 // EnqueueParams describes a job to enqueue. Type is required; Payload defaults
-// to an empty object, Queue to DefaultQueue, and MaxAttempts to
-// DefaultMaxAttempts.
+// to an empty object, Queue to DefaultQueue, MaxAttempts to
+// DefaultMaxAttempts, TimeoutSeconds to no timeout, and Priority to 0.
 type EnqueueParams struct {
-	Type        string
-	Payload     json.RawMessage
-	Queue       string
-	RunAt       *time.Time
-	MaxAttempts *int
+	Type           string
+	Payload        json.RawMessage
+	Queue          string
+	Priority       *int
+	RunAt          *time.Time
+	MaxAttempts    *int
+	TimeoutSeconds *int
 }
 
 // ValidationError reports a request rejected because of its input (a client
@@ -79,3 +84,8 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string { return e.Message }
+
+var (
+	// ErrJobRunning is returned when a job is running and cannot be deleted.
+	ErrJobRunning = errors.New("job is running")
+)

@@ -28,6 +28,7 @@ const deadJob: Job = {
   type: "email",
   payload: { to: "a@b.c" },
   queue: "critical",
+  priority: 0,
   status: "dead",
   attempts: 3,
   max_attempts: 3,
@@ -177,7 +178,7 @@ describe("console chrome", () => {
     render(<App />);
 
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toHaveTextContent(/distributed/);
+    expect(heading).toHaveTextContent(/Distributed Task Queue/);
   });
 
   it("links to GitHub from the header and footer", async () => {

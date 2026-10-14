@@ -22,7 +22,34 @@ export default function JobsView() {
   const [busy, setBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showEnqueue, setShowEnqueue] = useState(false);
+  const [nextCursor, setNextCursor] = useState<{
+    before_created_at: string;
+    before_id: string;
+  } | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [autoRefresh] = useState<boolean>(false);
 
+  const loadMore = useCallback(async () => {
+    if (!selected || !nextCursor || busy) return;
+    setBusy(true);
+    try {
+      const listed = await listJobs({
+        queue: selected,
+        status: statusFilter || undefined,
+        type: typeFilter || undefined,
+        limit: 50,
+        before_created_at: nextCursor.before_created_at,
+        before_id: nextCursor.before_id,
+      });
+      setJobs((prev) => [...prev, ...listed.jobs]);
+      setNextCursor(listed.next || null);
+      setError(null);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [selected, statusFilter, typeFilter, nextCursor, busy]);
   const loadQueues = useCallback(async () => {
     try {
       const { queues: nextQueues } = await listQueues();
@@ -43,17 +70,23 @@ export default function JobsView() {
     try {
       const [nextStats, listed] = await Promise.all([
         queueStats(selected),
-        listJobs({ queue: selected, status: statusFilter || undefined, limit: 50 }),
+        listJobs({
+          queue: selected,
+          status: statusFilter || undefined,
+          type: typeFilter || undefined,
+          limit: 50,
+        }),
       ]);
       setStats(nextStats);
       setJobs(listed.jobs);
+      setNextCursor(listed.next || null);
       setError(null);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
-  }, [selected, statusFilter]);
+  }, [selected, statusFilter, typeFilter]);
 
   useEffect(() => {
     void loadQueues();
@@ -62,6 +95,12 @@ export default function JobsView() {
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(loadQueue, 5000);
+    return () => clearInterval(id);
+  }, [autoRefresh, loadQueue]);
 
   const showNotice = useCallback((node: ReactNode) => {
     setNotice((current) => ({ id: (current?.id ?? 0) + 1, node }));
@@ -145,6 +184,15 @@ export default function JobsView() {
             ))}
           </select>
         </label>
+        <label>
+          Type
+          <input
+            type="text"
+            placeholder="filter by type (exact)"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          />
+        </label>
         <button type="button" onClick={() => void refresh()} disabled={busy}>
           {busy ? "Refreshing…" : "Refresh"}
         </button>
@@ -184,6 +232,11 @@ export default function JobsView() {
             disabled={bulkBusy}
           >
             {bulkBusy ? "Requeuing…" : "Requeue all dead"}
+          </button>
+        )}
+        {nextCursor && (
+          <button type="button" onClick={() => void loadMore()} disabled={busy}>
+            Load more
           </button>
         )}
       </section>
@@ -240,6 +293,11 @@ export default function JobsView() {
               ))}
             </tbody>
           </table>
+        )}
+        {nextCursor && (
+          <button type="button" onClick={() => void loadMore()} disabled={busy}>
+            Load more
+          </button>
         )}
       </section>
     </>

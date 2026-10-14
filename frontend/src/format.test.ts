@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTerminal, prettyJSON } from "./format";
+import { isTerminal, prettyJSON, requeueCurl } from "./format";
 
 describe("isTerminal", () => {
   it("is true only for completed, failed, and dead", () => {
@@ -20,5 +20,13 @@ describe("prettyJSON", () => {
     const cyclic: Record<string, unknown> = {};
     cyclic.self = cyclic;
     expect(prettyJSON(cyclic)).toBe("[object Object]");
+  });
+});
+
+describe("requeueCurl", () => {
+  it("builds a POST command against the given origin", () => {
+    expect(requeueCurl("https://queue.example", "abc-123")).toBe(
+      "curl -X POST https://queue.example/v1/jobs/abc-123/requeue",
+    );
   });
 });

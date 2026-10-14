@@ -10,6 +10,15 @@
           "format": "uuid",
           "type": "string"
         }
+      },
+      "QueueName": {
+        "description": "Queue name.",
+        "in": "path",
+        "name": "name",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
       }
     },
     "responses": {
@@ -66,6 +75,13 @@
           "payload": {
             "description": "Arbitrary JSON handed to the handler. Defaults to `{}`."
           },
+          "priority": {
+            "default": 0,
+            "description": "Claim priority; higher is claimed first. `run_at` breaks ties. Defaults to 0.\n",
+            "maximum": 2147483647,
+            "minimum": 0,
+            "type": "integer"
+          },
           "queue": {
             "default": "default",
             "description": "Queue name. Defaults to `default`.",
@@ -75,6 +91,12 @@
             "description": "Earliest time the job may be claimed. Defaults to now.",
             "format": "date-time",
             "type": "string"
+          },
+          "timeout_seconds": {
+            "description": "Per-attempt execution timeout in seconds. Omit, `null`, or `0` for no timeout.\n",
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
           },
           "type": {
             "description": "Handler name the worker dispatches on (e.g. `echo`).",
@@ -136,6 +158,11 @@
           "payload": {
             "description": "Arbitrary JSON handed to the handler. Defaults to `{}`."
           },
+          "priority": {
+            "description": "Claim priority; higher numbers are claimed first, with `run_at` breaking ties. Always present on a stored job.\n",
+            "example": 5,
+            "type": "integer"
+          },
           "queue": {
             "example": "default",
             "type": "string"
@@ -148,6 +175,13 @@
           "status": {
             "$ref": "#/components/schemas/JobStatus"
           },
+          "timeout_seconds": {
+            "description": "Per-attempt execution timeout in seconds. A handler that outlives it is cancelled and the attempt fails. `null` or `0` means no timeout.\n",
+            "example": 30,
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          },
           "type": {
             "description": "Handler name the worker dispatches on.",
             "type": "string"
@@ -158,6 +192,7 @@
           "type",
           "payload",
           "queue",
+          "priority",
           "status",
           "attempts",
           "max_attempts",
@@ -177,6 +212,28 @@
               "$ref": "#/components/schemas/Job"
             },
             "type": "array"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "properties": {
+                  "before_created_at": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "before_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "before_created_at",
+                  "before_id"
+                ],
+                "type": "object"
+              },
+              {}
+            ],
+            "description": "Cursor for next page or null"
           }
         },
         "required": [
@@ -195,6 +252,26 @@
           "dead"
         ],
         "type": "string"
+      },
+      "PurgeResult": {
+        "properties": {
+          "deleted": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "queue": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          }
+        },
+        "required": [
+          "queue",
+          "status",
+          "deleted"
+        ],
+        "type": "object"
       },
       "QueueInfo": {
         "properties": {
@@ -392,6 +469,35 @@
       }
     },
     "/v1/jobs/{id}": {
+      "delete": {
+        "operationId": "deleteJob",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Job deleted."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Delete a job",
+        "tags": [
+          "jobs"
+        ]
+      },
       "get": {
         "operationId": "getJob",
         "parameters": [
@@ -479,6 +585,54 @@
           }
         },
         "summary": "List queues",
+        "tags": [
+          "queues"
+        ]
+      }
+    },
+    "/v1/queues/{name}/jobs": {
+      "delete": {
+        "operationId": "purgeTerminalJobs",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/QueueName"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/JobStatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurgeResult"
+                }
+              }
+            },
+            "description": "Purge result"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Purge terminal jobs in a queue",
         "tags": [
           "queues"
         ]

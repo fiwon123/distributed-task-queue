@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { requeueJob } from "./api";
 import CopyButton from "./CopyButton";
-import { errorMessage, isRequeueable, isTerminal, prettyJSON, shortID } from "./format";
+import {
+  errorMessage,
+  isRequeueable,
+  isTerminal,
+  prettyJSON,
+  requeueCurl,
+  shortID,
+} from "./format";
 import { AppLink } from "./router";
 import Skeleton from "./Skeleton";
 import type { Job } from "./types";
@@ -30,6 +37,9 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
 
   const banner = error ?? actionError;
   const payloadText = job !== null ? prettyJSON(job.payload) : "";
+  // The same request the Requeue button sends, as a CLI command the operator can
+  // copy. Built from the live origin so it works behind any host.
+  const curlCommand = job !== null ? requeueCurl(window.location.origin, job.id) : "";
 
   return (
     <section aria-label="job detail" aria-busy={loading}>
@@ -63,9 +73,17 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
             <dd>{job.type}</dd>
             <dt>Queue</dt>
             <dd>{job.queue}</dd>
+            <dt>Priority</dt>
+            <dd>{job.priority}</dd>
             <dt>Attempts</dt>
             <dd>
               {job.attempts} / {job.max_attempts}
+            </dd>
+            <dt>Timeout</dt>
+            <dd>
+              {job.timeout_seconds != null && job.timeout_seconds > 0
+                ? `${job.timeout_seconds}s`
+                : "—"}
             </dd>
             <dt>Run at</dt>
             <dd className="mono">{job.run_at}</dd>
@@ -86,14 +104,21 @@ export default function JobDetail({ id, pollIntervalMs }: { id: string; pollInte
             <CopyButton value={payloadText} label="Copy JSON" />
           </div>
           {isRequeueable(job.status) && (
-            <button
-              type="button"
-              className="primary"
-              onClick={() => void onRequeue(job)}
-              disabled={busy}
-            >
-              Requeue
-            </button>
+            <div className="requeue-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void onRequeue(job)}
+                disabled={busy}
+              >
+                Requeue
+              </button>
+              <div className="curl-snippet">
+                <span className="muted">Or requeue via the API:</span>
+                <pre className="mono">{curlCommand}</pre>
+                <CopyButton value={curlCommand} label="Copy curl" />
+              </div>
+            </div>
           )}
         </>
       )}

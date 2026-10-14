@@ -20,6 +20,7 @@ const base: Job = {
   type: "echo",
   payload: { hello: "world" },
   queue: "default",
+  priority: 0,
   status: "running",
   attempts: 1,
   max_attempts: 3,
@@ -39,14 +40,32 @@ describe("JobDetail", () => {
   it("shows the full record with a pretty-printed payload", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse(job({ status: "dead", last_error: "kaboom" }))),
+      vi.fn(async () =>
+        jsonResponse(
+          job({ status: "dead", last_error: "kaboom", timeout_seconds: 30, priority: 5 }),
+        ),
+      ),
     );
     render(<JobDetail id={base.id} pollIntervalMs={1000} />);
 
     const region = await screen.findByRole("region", { name: "job detail" });
     expect(within(region).getByText("kaboom")).toBeInTheDocument();
     expect(within(region).getByText(/1 \/ 3/)).toBeInTheDocument();
+    expect(within(region).getByText("30s")).toBeInTheDocument();
+    expect(within(region).getByText("5")).toBeInTheDocument();
     expect(within(region).getByText(/"hello": "world"/)).toBeInTheDocument();
+  });
+
+  it("shows no timeout when the job has none", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(job({}))),
+    );
+    render(<JobDetail id={base.id} pollIntervalMs={1000} />);
+
+    const region = await screen.findByRole("region", { name: "job detail" });
+    const term = within(region).getByText("Timeout");
+    expect(term.nextElementSibling).toHaveTextContent("—");
   });
 
   it("polls a running job until it is terminal, then stops", async () => {
@@ -85,5 +104,30 @@ describe("JobDetail", () => {
     await waitFor(() =>
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/requeue"))).toBe(true),
     );
+  });
+
+  it("offers a copyable curl command to requeue a dead job", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(job({ status: "dead", last_error: "kaboom" }))),
+    );
+    render(<JobDetail id={base.id} pollIntervalMs={1000} />);
+
+    const region = await screen.findByRole("region", { name: "job detail" });
+    const command = `curl -X POST ${window.location.origin}/v1/jobs/${base.id}/requeue`;
+    expect(within(region).getByText(command)).toBeInTheDocument();
+    expect(within(region).getByRole("button", { name: "Copy curl" })).toBeInTheDocument();
+  });
+
+  it("omits the requeue command while a job cannot be requeued", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(job({ status: "running" }))),
+    );
+    render(<JobDetail id={base.id} pollIntervalMs={1000} />);
+
+    const region = await screen.findByRole("region", { name: "job detail" });
+    await within(region).findByText("running");
+    expect(within(region).queryByText(/curl -X POST/)).not.toBeInTheDocument();
   });
 });

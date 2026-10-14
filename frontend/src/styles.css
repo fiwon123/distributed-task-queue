@@ -768,6 +768,16 @@ th {
   margin-top: 0.75rem;
 }
 
+.field-error {
+  margin: 0.4rem 0 0;
+  color: var(--dead);
+  font-size: 0.75rem;
+}
+
+.payload-field textarea[aria-invalid="true"] {
+  border-color: var(--dead);
+}
+
 /* --- Job detail --------------------------------------------------------- */
 
 .detail {
@@ -820,6 +830,31 @@ pre.payload {
   border-radius: 8px;
   padding: 0.75rem;
   overflow: auto;
+}
+
+.requeue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.curl-snippet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.curl-snippet pre {
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
 }
 
 /* --- Workbench ---------------------------------------------------------- */
@@ -1065,4 +1100,145 @@ fieldset.parameters label {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* --- Concepts & diagrams (About) ---------------------------------------- */
+
+.concepts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.concept-card {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.concept-card h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.concept-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.concept-list {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.concept-list li {
+  margin: 0;
+}
+
+.state-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  margin: 0.75rem 0 1.5rem;
+  overflow-x: auto;
+}
+
+.state-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.state.success {
+  border-color: color-mix(in srgb, #22c55e 45%, var(--border));
+  color: color-mix(in srgb, #22c55e 85%, var(--text));
+  background: color-mix(in srgb, #22c55e 14%, var(--surface-2));
+}
+
+.state.warn {
+  border-color: color-mix(in srgb, #f59e0b 45%, var(--border));
+  color: color-mix(in srgb, #f59e0b 85%, var(--text));
+  background: color-mix(in srgb, #f59e0b 14%, var(--surface-2));
+}
+
+.state.danger {
+  border-color: color-mix(in srgb, #ef4444 45%, var(--border));
+  color: color-mix(in srgb, #ef4444 85%, var(--text));
+  background: color-mix(in srgb, #ef4444 14%, var(--surface-2));
+}
+
+.arrow {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.table-wrap {
+  margin: 0.75rem 0 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+.kv-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.kv-table thead th {
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.kv-table tbody td {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.kv-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.kv-table tbody td:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+  width: 1%;
+}
+
+.kv-table tbody td:last-child {
+  color: var(--muted);
 }

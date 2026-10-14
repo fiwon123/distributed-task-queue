@@ -55,12 +55,19 @@ ARG GH_CLI_VERSION=v2.102.0
 ARG TARGETARCH
 # Node powers the frontend dashboard (frontend/); keep in sync with mise.toml.
 ARG NODE_VERSION=v24.21.0
+# Playwright version baked into the screenshot toolchain; keep in sync with
+# node_modules/playwright in frontend/package-lock.json (Dependabot bumps there
+# mean bumping this ARG too — or `npx playwright install chromium` on first run).
+ARG PLAYWRIGHT_VERSION=1.64.0
 # The host uid/gid, forwarded as build args by docker-compose.yml so the image
 # can create a passwd entry + home matching the host user (kills "I have no
 # name!"). Defaults keep a standalone `docker build` working.
 ARG HOST_UID=1000
 ARG HOST_GID=1000
 
+# Fonts (fontconfig + Latin families) are REQUIRED for `make screenshots`:
+# headless Chromium resolves text through fontconfig, and with no fonts it
+# renders glyphs as nothing — the black-screenshot bug (issue #75).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
@@ -68,6 +75,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     zsh \
     postgresql-client \
+    fontconfig \
+    fonts-liberation \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 RUN if [ -z "$TARGETARCH" ]; then \
@@ -102,6 +112,21 @@ RUN if [ -z "$TARGETARCH" ]; then \
     && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
     && rm -f /tmp/node.tar.xz \
     && node --version && npm --version
+
+# Screenshot toolchain for `make screenshots` (issue #75): bake the Playwright
+# Chromium build and its system libraries into the sandbox so the README
+# screenshots can be regenerated inside `make opencode` with no extra setup.
+# Browsers live at /opt/ms-playwright — INSIDE the image — so the /workspace
+# bind mount and the (ephemeral) /home/devuser or /workspace/.xdg-* caches can
+# never shadow or lose them. Fonts were installed with the apt block above.
+RUN PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
+    && chmod -R a+rX /opt/ms-playwright \
+    && rm -rf /root/.npm /root/.cache/ms-playwright
+
+# Export the baked-in browser location for the runtime user (devuser) too;
+# playwright resolves its registry from this env var instead of $HOME.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
 # Fast reload for the Go dev loop. This runs as root ON PURPOSE — `go install`
 # writes /go/bin, which is root-owned; the runtime user only needs to EXECUTE

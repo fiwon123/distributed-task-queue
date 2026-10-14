@@ -5,6 +5,7 @@ package queue
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -113,6 +114,61 @@ func TestClaimConcurrentNoDoubleClaim(t *testing.T) {
 		if n != 1 {
 			t.Errorf("job %s claimed %d times, want 1", id, n)
 		}
+	}
+}
+
+// TestExtendLeaseKeepsJobHidden covers the heartbeat store call: renewing the
+// lease before it lapses keeps a job claimed past its original lease, the
+// renewed fence is what completes it, and renewal only works while the caller
+// still holds the lease.
+func TestExtendLeaseKeepsJobHidden(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	maxAttempts := 5
+	job, err := store.Enqueue(ctx, EnqueueParams{Type: "noop", Queue: q, MaxAttempts: &maxAttempts})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	claimed := claimOne(t, store, q, 100*time.Millisecond)
+	if claimed.ID != job.ID {
+		t.Fatalf("claimed %s, want %s", claimed.ID, job.ID)
+	}
+
+	// Renew with a generous lease before the original one lapses.
+	renewed, err := store.ExtendLease(ctx, claimed.ID, *claimed.LockedUntil, 30*time.Second)
+	if err != nil {
+		t.Fatalf("extend lease: %v", err)
+	}
+	if !renewed.After(*claimed.LockedUntil) {
+		t.Errorf("renewed lease %v not after original %v", renewed, *claimed.LockedUntil)
+	}
+
+	// Past the original lease but well within the renewed one: not claimable.
+	time.Sleep(250 * time.Millisecond)
+	jobs, err := store.Claim(ctx, ClaimParams{Queues: []string{q}, Lease: time.Minute, Limit: 1})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("renewed job was reclaimed, got %d jobs", len(jobs))
+	}
+
+	// The original fence is stale; the renewed fence completes the job.
+	if _, err := store.Complete(ctx, job.ID, *claimed.LockedUntil); !errors.Is(err, ErrLeaseLost) {
+		t.Errorf("complete with original fence = %v, want ErrLeaseLost", err)
+	}
+	if _, err := store.Complete(ctx, job.ID, renewed); err != nil {
+		t.Fatalf("complete with renewed fence: %v", err)
+	}
+
+	// Renewal only works while the job is running.
+	if _, err := store.ExtendLease(ctx, job.ID, renewed, time.Minute); !errors.Is(err, ErrLeaseLost) {
+		t.Errorf("extend after complete = %v, want ErrLeaseLost", err)
 	}
 }
 
@@ -290,6 +346,92 @@ func TestFencedUpdatesRejectStaleLease(t *testing.T) {
 	// ...and a second completion finds no running row.
 	if _, err := store.Complete(ctx, job.ID, *claimed.LockedUntil); !errors.Is(err, ErrLeaseLost) {
 		t.Errorf("second complete error = %v, want ErrLeaseLost", err)
+	}
+}
+
+// TestClaimPrefersPriorityThenRunAt verifies the claim ordering: higher
+// priority first, run_at breaking ties. jobD is due earliest but has the lowest
+// priority, so it must be claimed last.
+func TestClaimPrefersPriorityThenRunAt(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	now := time.Now()
+	enqueueAt := func(typ string, priority int, runAt time.Time) Job {
+		t.Helper()
+		job, err := store.Enqueue(ctx, EnqueueParams{
+			Type:     typ,
+			Queue:    q,
+			Priority: intPtr(priority),
+			RunAt:    &runAt,
+		})
+		if err != nil {
+			t.Fatalf("enqueue %s: %v", typ, err)
+		}
+		if job.Priority != priority {
+			t.Fatalf("%s priority = %d, want %d", typ, job.Priority, priority)
+		}
+		return job
+	}
+	jobA := enqueueAt("a", 1, now.Add(-3*time.Second))
+	jobB := enqueueAt("b", 5, now.Add(-2*time.Second))
+	jobC := enqueueAt("c", 5, now.Add(-1*time.Second))
+	jobD := enqueueAt("d", 0, now.Add(-4*time.Second))
+
+	claimed, err := store.Claim(ctx, ClaimParams{Queues: []string{q}, Lease: time.Minute, Limit: 4})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	got := make([]string, 0, len(claimed))
+	for _, job := range claimed {
+		got = append(got, job.ID)
+	}
+	want := []string{jobB.ID, jobC.ID, jobA.ID, jobD.ID}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("claim order = %v, want %v (priority DESC, run_at ASC)", got, want)
+	}
+}
+
+// TestClaimLimitTakesHighestPriority guards the SQL side of the ordering: with
+// more due jobs than the limit, the CTE's ORDER BY + LIMIT must pick the
+// highest-priority jobs (not the in-memory sort, which would reorder whatever
+// rows came back). If the SQL ordering regressed to ascend, this test fails
+// while TestClaimPrefersPriorityThenRunAt would still pass.
+func TestClaimLimitTakesHighestPriority(t *testing.T) {
+	pool := testPool(t)
+	store := New(pool)
+	ctx := context.Background()
+	q := testQueue(t)
+	defer cleanupQueue(t, pool, q)
+
+	now := time.Now()
+	// Five due jobs with priorities 0..4; only the two highest may win.
+	ids := make([]string, 5)
+	for p := 0; p < 5; p++ {
+		job, err := store.Enqueue(ctx, EnqueueParams{
+			Type:     fmt.Sprintf("p%d", p),
+			Queue:    q,
+			Priority: intPtr(p),
+			RunAt:    &now,
+		})
+		if err != nil {
+			t.Fatalf("enqueue priority %d: %v", p, err)
+		}
+		ids[p] = job.ID
+	}
+
+	claimed, err := store.Claim(ctx, ClaimParams{Queues: []string{q}, Lease: time.Minute, Limit: 2})
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if len(claimed) != 2 {
+		t.Fatalf("claimed %d jobs, want 2", len(claimed))
+	}
+	if claimed[0].ID != ids[4] || claimed[1].ID != ids[3] {
+		t.Errorf("limit 2 claimed priorities %d/%d, want 4/3 (SQL ordering)", claimed[0].Priority, claimed[1].Priority)
 	}
 }
 

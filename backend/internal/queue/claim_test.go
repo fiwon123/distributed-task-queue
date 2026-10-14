@@ -31,3 +31,17 @@ func TestClaimValidatesParams(t *testing.T) {
 		})
 	}
 }
+
+func TestExtendLeaseValidatesParams(t *testing.T) {
+	// A zero Store has a nil pool; ExtendLease must reject a bad lease before
+	// touching it.
+	s := &Store{}
+
+	for _, lease := range []time.Duration{0, -time.Second} {
+		_, err := s.ExtendLease(context.Background(), "id", time.Now(), lease)
+		var invalid *ValidationError
+		if !errors.As(err, &invalid) {
+			t.Fatalf("ExtendLease(lease=%v) error = %v, want *ValidationError", lease, err)
+		}
+	}
+}
