@@ -300,3 +300,14 @@ func (s *Server) handlePurgeTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"queue": name, "status": status, "deleted": deleted})
 }
+
+// handleListWorkers implements GET /v1/workers.
+func (s *Server) handleListWorkers(w http.ResponseWriter, r *http.Request) {
+	workers, err := s.store.ListWorkers(r.Context())
+	if err != nil {
+		s.log.Error("list workers failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"workers": workers})
+}
