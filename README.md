@@ -1,17 +1,21 @@
-# Distributed Task Queue
+<h1 align="center">
+  <img src="frontend/public/favicon.svg" width="48" alt="Distributed Task Queue logo">
+  <br>
+  Distributed Task Queue
+</h1>
 
-A durable, PostgreSQL-backed distributed task queue built from scratch in Go.
-Producers enqueue jobs over HTTP; one or more workers pull them from the
-database, run them, and survive crashes without losing work.
+<p align="center">A durable, PostgreSQL-backed distributed task queue — enqueue jobs, run workers, and survive crashes without losing work.</p>
 
-[![CI](https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml/badge.svg)](https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml"><img src="https://github.com/fiwon123/distributed-task-queue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26-blue" alt="Go Version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
-> **Educational project — not production-ready.** There is no TLS, no
-> authentication, and no operational hardening. The goal is to understand how a
-> durable queue recovers abandoned work and bounds retries, not to run this in
-> front of real traffic.
+<p align="center">
+  <img src="docs/screenshots/console-dark.png" alt="Distributed Task Queue console (dark)" width="900">
+</p>
+
 
 ## Problem
 
@@ -36,13 +40,11 @@ jobs land somewhere inspectable instead of vanishing.
 - [Development](#development)
 - [Building the dashboard](#building-the-dashboard)
 - [License](#license)
-- [Contributing](#contributing)
-- [Changelog](#changelog)
 
 
 ## Screenshots
 
-> Screenshots are generated with mocked data (dark mode). To regenerate locally: `make screenshots`. If the headless environment lacks a display server, regenerate on a host with a browser/display.
+> Screenshots are generated with mocked data (dark mode). To regenerate locally: `make screenshots`.
 
 | Screen | What it shows |
 |---|---|
@@ -317,10 +319,3 @@ client-side routes work on reload.
 
 MIT. See [LICENSE](LICENSE).
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch/commit conventions, testing, and PR guidelines.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for release notes.

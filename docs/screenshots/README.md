@@ -6,10 +6,8 @@ These screenshots were generated using the scripted Playwright capture (mocked /
 make screenshots
 ```
 
-Note: in headless environments without a display server, Playwright may require xvfb; if generation fails locally, regenerate on a machine with a display or skip committing new images if they are unchanged in intent.
-
 Files:
-- console-dark.png — Jobs console listing queues and jobs (mixed states), enqueue form context
-- job-detail-dark.png — Live job detail view for a running job
-- workbench-dark.png — Workbench (API request runner built from OpenAPI)
-- about-dark.png — About/Concepts & how it works page (educational theory)
+- console-dark.png — Jobs console listing queues and jobs (mixed states)
+- job-detail-dark.png — Live job detail showing attempts, lease context, payload, last error
+- workbench-dark.png — Workbench driving the API from the served OpenAPI spec
+- about-dark.png — Concepts & how it works (theory, architecture mapping, concepts, state diagram)
