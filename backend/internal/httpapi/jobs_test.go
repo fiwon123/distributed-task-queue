@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
@@ -634,3 +635,7 @@ func TestDashboardDoesNotShadowAPIRoutes(t *testing.T) {
 func (f *fakeStore) Ping(ctx context.Context) error {
 	return nil
 }
+
+
+func (f *fakeStore) Delete(ctx context.Context, id string) error { return nil }
+func (f *fakeStore) PurgeTerminal(ctx context.Context, queue string, status queue.Status, before *time.Time) (int, error) { return 0, nil }
