@@ -237,7 +237,7 @@ func (s *Server) handleListJobs(w http.ResponseWriter, r *http.Request) {
 		resp["next"] = nil
 	}
 	writeJSON(w, http.StatusOK, resp)
-}// handleListQueues implements GET /v1/queues.
+} // handleListQueues implements GET /v1/queues.
 func (s *Server) handleListQueues(w http.ResponseWriter, r *http.Request) {
 	queues, err := s.store.ListQueues(r.Context())
 	if err != nil {
@@ -247,4 +247,56 @@ func (s *Server) handleListQueues(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"queues": queues})
+}
+
+// handleDeleteJob implements DELETE /v1/jobs/{id}.
+func (s *Server) handleDeleteJob(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/v1/jobs/")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "job id required")
+		return
+	}
+	err := s.store.Delete(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, queue.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "job not found")
+			return
+		}
+		if errors.Is(err, queue.ErrJobRunning) {
+			writeError(w, http.StatusConflict, "job is running")
+			return
+		}
+		var ve *queue.ValidationError
+		if errors.As(err, &ve) {
+			writeError(w, http.StatusBadRequest, ve.Error())
+			return
+		}
+		s.log.Error("delete job failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handlePurgeTerminal implements DELETE /v1/queues/{name}/jobs.
+func (s *Server) handlePurgeTerminal(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "queue name is required")
+		return
+	}
+	status := queue.Status(strings.TrimSpace(r.URL.Query().Get("status")))
+	before := parseTime(r.URL.Query().Get("before"))
+	deleted, err := s.store.PurgeTerminal(r.Context(), name, status, before)
+	if err != nil {
+		var ve *queue.ValidationError
+		if errors.As(err, &ve) {
+			writeError(w, http.StatusBadRequest, ve.Error())
+			return
+		}
+		s.log.Error("purge terminal jobs failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"queue": name, "status": status, "deleted": deleted})
 }

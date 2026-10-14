@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/fiwon123/distributed-task-queue/backend/internal/queue"
 )
@@ -25,6 +26,8 @@ type JobStore interface {
 	QueueStats(ctx context.Context, queue string) (queue.Stats, error)
 	ListJobs(ctx context.Context, p queue.ListParams) ([]queue.Job, error)
 	ListQueues(ctx context.Context) ([]queue.QueueInfo, error)
+	Delete(ctx context.Context, id string) error
+	PurgeTerminal(ctx context.Context, queue string, status queue.Status, before *time.Time) (int, error)
 	Ping(ctx context.Context) error
 }
 
@@ -80,7 +83,9 @@ func (s *Server) routes() []route {
 		{http.MethodGet, "/v1/jobs", s.handleListJobs},
 		{http.MethodGet, "/v1/jobs/{id}", s.handleGetJob},
 		{http.MethodPost, "/v1/jobs/{id}/requeue", s.handleRequeue},
+		{http.MethodDelete, "/v1/jobs/{id}", s.handleDeleteJob},
 		{http.MethodGet, "/v1/queues", s.handleListQueues},
+		{http.MethodDelete, "/v1/queues/{name}/jobs", s.handlePurgeTerminal},
 		{http.MethodPost, "/v1/queues/{name}/requeue-dead", s.handleRequeueDead},
 		{http.MethodGet, "/v1/queues/{name}/stats", s.handleQueueStats},
 	}
@@ -109,7 +114,6 @@ func (s *Server) Handler() http.Handler {
 	}
 	return mux
 }
-
 
 // handleHealth is a liveness probe.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
