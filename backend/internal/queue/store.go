@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -241,4 +242,61 @@ func (s *Store) QueueStats(ctx context.Context, queueName string) (Stats, error)
 // Ping reports whether the database is reachable.
 func (s *Store) Ping(ctx context.Context) error {
 	return s.pool.Ping(ctx)
+}
+
+// Delete removes the job with the given ID if it is not currently running.
+// Returns ErrJobRunning if the job is in running state.
+func (s *Store) Delete(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return &ValidationError{Message: "job id required"}
+	}
+	var status Status
+	err := s.pool.QueryRow(ctx, "SELECT status FROM jobs WHERE id::text = $1", id).Scan(&status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("get job status: %w", err)
+	}
+	if status == StatusRunning {
+		return ErrJobRunning
+	}
+	res, err := s.pool.Exec(ctx, "DELETE FROM jobs WHERE id::text = $1", id)
+	if err != nil {
+		return fmt.Errorf("delete job: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// PurgeTerminal removes all terminal jobs in the given queue with the specified
+// status and optionally before a certain created_at. Only completed/failed/dead
+// statuses are allowed; returns the number of deleted rows.
+func (s *Store) PurgeTerminal(ctx context.Context, queueName string, status Status, before *time.Time) (int, error) {
+	queueName = strings.TrimSpace(queueName)
+	if queueName == "" {
+		return 0, &ValidationError{Message: "queue name required"}
+	}
+	if status != StatusCompleted && status != StatusFailed && status != StatusDead {
+		return 0, &ValidationError{Message: "status must be one of: completed, failed, dead"}
+	}
+	var args []any
+	args = append(args, queueName)
+	args = append(args, status)
+	var where []string
+	where = append(where, fmt.Sprintf("queue = $%d", len(args)-1))
+	where = append(where, fmt.Sprintf("status = $%d", len(args)))
+	if before != nil {
+		args = append(args, *before)
+		where = append(where, fmt.Sprintf("created_at < $%d", len(args)))
+	}
+	q := fmt.Sprintf("DELETE FROM jobs WHERE %s", strings.Join(where, " AND "))
+	res, err := s.pool.Exec(ctx, q, args...)
+	if err != nil {
+		return 0, fmt.Errorf("purge terminal jobs: %w", err)
+	}
+	return int(res.RowsAffected()), nil
 }
