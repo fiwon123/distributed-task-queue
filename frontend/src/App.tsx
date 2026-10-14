@@ -25,10 +25,7 @@ export default function App() {
         <h1 className="brand">
           <AppLink to="/">
             <Logo size={30} />
-            <span className="brand-name">
-              distributed<span className="brand-accent">·</span>task
-              <span className="brand-accent">·</span>queue
-            </span>
+            <span className="brand-name">Distributed Task Queue</span>
           </AppLink>
         </h1>
 

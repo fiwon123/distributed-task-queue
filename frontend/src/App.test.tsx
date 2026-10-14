@@ -178,7 +178,7 @@ describe("console chrome", () => {
     render(<App />);
 
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading).toHaveTextContent(/distributed/);
+    expect(heading).toHaveTextContent(/Distributed Task Queue/);
   });
 
   it("links to GitHub from the header and footer", async () => {
