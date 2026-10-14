@@ -67,7 +67,7 @@ func (s *Store) ListWorkers(ctx context.Context) ([]WorkerInfo, error) {
 		return nil, fmt.Errorf("list workers: %w", err)
 	}
 	defer rows.Close()
-	var out []WorkerInfo
+	out := make([]WorkerInfo, 0)
 	for rows.Next() {
 		var w WorkerInfo
 		var qarr, tarr []string

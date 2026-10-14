@@ -362,6 +362,61 @@
           "total"
         ],
         "type": "object"
+      },
+      "WorkerInfo": {
+        "properties": {
+          "alive": {
+            "description": "Whether the last heartbeat is recent enough to consider the worker alive.",
+            "type": "boolean"
+          },
+          "concurrency": {
+            "description": "Number of jobs the worker runs at once.",
+            "example": 4,
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "description": "Time of the most recent heartbeat.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "Human-readable worker name.",
+            "type": "string"
+          },
+          "queues": {
+            "description": "Queues this worker polls (empty means all).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "types": {
+            "description": "Job types this worker can handle.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "queues",
+          "types",
+          "concurrency",
+          "started_at",
+          "last_seen_at",
+          "alive"
+        ],
+        "type": "object"
       }
     }
   },
@@ -717,6 +772,39 @@
           "queues"
         ]
       }
+    },
+    "/v1/workers": {
+      "get": {
+        "description": "Returns the registered workers with their heartbeat metadata.",
+        "operationId": "listWorkers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "workers": {
+                      "items": {
+                        "$ref": "#/components/schemas/WorkerInfo"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "workers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "List of workers"
+          }
+        },
+        "summary": "List registered workers",
+        "tags": [
+          "workers"
+        ]
+      }
     }
   },
   "servers": [
@@ -733,6 +821,10 @@
     {
       "description": "Queue-level listings and statistics.",
       "name": "queues"
+    },
+    {
+      "description": "Registered worker processes and their heartbeats.",
+      "name": "workers"
     }
   ]
 }

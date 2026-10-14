@@ -47,6 +47,9 @@ type fakeStore struct {
 	listQueues      []queue.QueueInfo
 	listQueuesErr   error
 	listQueuesCalls int
+
+	listWorkers    []queue.WorkerInfo
+	listWorkersErr error
 }
 
 func (f *fakeStore) Enqueue(_ context.Context, p queue.EnqueueParams) (queue.Job, error) {
@@ -575,6 +578,43 @@ func TestHandleListQueuesInternalError(t *testing.T) {
 	}
 }
 
+func TestHandleListWorkersOK(t *testing.T) {
+	store := &fakeStore{listWorkers: []queue.WorkerInfo{
+		{ID: testJobID, Name: "worker-1", Queues: []string{"default"}, Types: []string{"echo"}, Concurrency: 4, Alive: true},
+	}}
+
+	w := do(t, store, http.MethodGet, "/v1/workers", "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("content-type = %q, want application/json", ct)
+	}
+	var got struct {
+		Workers []queue.WorkerInfo `json:"workers"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(got.Workers) != 1 || got.Workers[0].Name != "worker-1" || !got.Workers[0].Alive {
+		t.Errorf("workers = %+v", got.Workers)
+	}
+}
+
+func TestHandleListWorkersInternalError(t *testing.T) {
+	store := &fakeStore{listWorkersErr: errors.New("boom")}
+
+	w := do(t, store, http.MethodGet, "/v1/workers", "")
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", w.Code, http.StatusInternalServerError, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "boom") {
+		t.Errorf("internal error leaked to client: %s", w.Body.String())
+	}
+}
+
 // TestDashboardServing covers the embedded-SPA handler: real assets are served,
 // unknown client-side routes fall back to index.html, and non-GET is rejected.
 func TestDashboardServing(t *testing.T) {
@@ -645,7 +685,7 @@ func (f *fakeStore) UpsertWorker(ctx context.Context, id, name string, queues, t
 	return queue.WorkerInfo{}, nil
 }
 func (f *fakeStore) ListWorkers(ctx context.Context) ([]queue.WorkerInfo, error) {
-	return nil, nil
+	return f.listWorkers, f.listWorkersErr
 }
 func (f *fakeStore) DeleteWorker(ctx context.Context, id string) error {
 	return nil
