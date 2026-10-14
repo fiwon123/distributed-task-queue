@@ -14,11 +14,6 @@
   <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61DAFB" alt="React 19"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
-<p align="center">
-  <a href="https://github.com/fiwon123/distributed-task-queue/stargazers"><img src="https://img.shields.io/github/stars/fiwon123/distributed-task-queue?style=flat&logo=github&label=stars" alt="GitHub stars"></a>
-  <a href="https://github.com/fiwon123/distributed-task-queue/issues"><img src="https://img.shields.io/github/issues/fiwon123/distributed-task-queue" alt="GitHub issues"></a>
-  <a href="https://github.com/fiwon123/distributed-task-queue/commits/dev"><img src="https://img.shields.io/github/last-commit/fiwon123/distributed-task-queue" alt="Last commit"></a>
-</p>
 
 <p align="center">
   <img src="docs/screenshots/console-dark.png" alt="Distributed Task Queue console (dark)">
