@@ -636,6 +636,17 @@ func (f *fakeStore) Ping(ctx context.Context) error {
 	return nil
 }
 
-
 func (f *fakeStore) Delete(ctx context.Context, id string) error { return nil }
-func (f *fakeStore) PurgeTerminal(ctx context.Context, queue string, status queue.Status, before *time.Time) (int, error) { return 0, nil }
+func (f *fakeStore) PurgeTerminal(ctx context.Context, queue string, status queue.Status, before *time.Time) (int, error) {
+	return 0, nil
+}
+
+func (f *fakeStore) UpsertWorker(ctx context.Context, id, name string, queues, types []string, concurrency int, startedAt *time.Time) (queue.WorkerInfo, error) {
+	return queue.WorkerInfo{}, nil
+}
+func (f *fakeStore) ListWorkers(ctx context.Context) ([]queue.WorkerInfo, error) {
+	return nil, nil
+}
+func (f *fakeStore) DeleteWorker(ctx context.Context, id string) error {
+	return nil
+}

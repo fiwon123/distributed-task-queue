@@ -28,6 +28,9 @@ type JobStore interface {
 	ListQueues(ctx context.Context) ([]queue.QueueInfo, error)
 	Delete(ctx context.Context, id string) error
 	PurgeTerminal(ctx context.Context, queue string, status queue.Status, before *time.Time) (int, error)
+	UpsertWorker(ctx context.Context, id, name string, queues, types []string, concurrency int, startedAt *time.Time) (queue.WorkerInfo, error)
+	ListWorkers(ctx context.Context) ([]queue.WorkerInfo, error)
+	DeleteWorker(ctx context.Context, id string) error
 	Ping(ctx context.Context) error
 }
 
