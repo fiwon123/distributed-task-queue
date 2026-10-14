@@ -44,14 +44,21 @@ jobs land somewhere inspectable instead of vanishing.
 
 ## Screenshots
 
-> Screenshots are generated with mocked data (dark mode). To regenerate locally: `make screenshots`.
+**Jobs console (dark)** — queues, job list with status/priority/type, and enqueue form.
 
-| Screen | What it shows |
-|---|---|
-| ![Console (dark)](docs/screenshots/console-dark.png) | Jobs console: queues, job list (status/priority/type), enqueue form. |
-| ![Job detail (dark)](docs/screenshots/job-detail-dark.png) | Live job detail showing attempts, lease/heartbeat context, payload, and last error. |
-| ![Workbench (dark)](docs/screenshots/workbench-dark.png) | Workbench driving the API from the served OpenAPI spec. |
-| ![About/Concepts (dark)](docs/screenshots/about-dark.png) | Concepts & how it works: theory, architecture mapping, concepts, state diagram, characteristics. |
+![Jobs console (dark)](docs/screenshots/console-dark.png)
+
+**Job detail (dark)** — live job detail showing attempts, lease context, payload, and last error.
+
+![Job detail (dark)](docs/screenshots/job-detail-dark.png)
+
+**Workbench (dark)** — API request runner built from the served OpenAPI spec.
+
+![Workbench (dark)](docs/screenshots/workbench-dark.png)
+
+**Concepts & how it works (dark)** — theory, architecture mapping, core concepts, job lifecycle diagram, and key characteristics.
+
+![About/Concepts (dark)](docs/screenshots/about-dark.png)
 
 ## What you can do
 

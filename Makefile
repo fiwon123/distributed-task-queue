@@ -188,3 +188,7 @@ prod-reset: ## Stop the production stack and delete the Postgres volume
 
 demo: ## Enqueue demo jobs against the running stack (needs curl)
 	@scripts/demo.sh
+
+.PHONY: screenshots
+screenshots:
+	cd frontend && node tools/screenshot.cjs
