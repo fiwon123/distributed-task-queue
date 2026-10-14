@@ -10,6 +10,7 @@ NPM ?= npm
 
 .PHONY: help check fmt vet test build run run-worker openapi-json clean \
         frontend-install frontend-deps frontend-build frontend-test frontend-lint frontend-check \
+        frontend-src-guard \
         preflight dev-up dev-down dev-restart dev-log dev-build reset \
         shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
         prod-up prod-down prod-logs prod-ps prod-reset demo
@@ -90,10 +91,25 @@ frontend-lint: frontend-deps ## Lint (oxlint) + format-check (oxfmt) the dashboa
 
 ## frontend-check: lint + test the dashboard; skips loudly when Node is absent
 frontend-check:
+	@$(MAKE) frontend-src-guard
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
 	  echo "==> frontend checks SKIPPED (node not found — skipped is not passed)"; \
 	else \
 	  $(MAKE) frontend-lint frontend-test; \
+	fi
+
+# The dashboard is TypeScript-only: Vite resolves a stray .js BEFORE the real
+# .tsx source, so a leftover transpile silently shadows the file it was
+# generated from and `frontend/dist` gets built from stale code. Fail loudly
+# instead (see issue #75).
+frontend-src-guard:
+	@echo "==> frontend/src stray-JS guard"
+	@bad=$$(find frontend/src -type f \( -name '*.js' -o -name '*.jsx' \) 2>/dev/null); \
+	if [ -n "$$bad" ]; then \
+	  echo "stray JavaScript in the TS-only frontend/src (Vite would prefer it over .tsx):"; \
+	  echo "$$bad"; \
+	  echo "delete them: rm frontend/src/*.js frontend/src/*.test.js"; \
+	  exit 1; \
 	fi
 
 # --- Dev sandbox (docker compose) ----------------------------------------------
