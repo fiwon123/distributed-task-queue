@@ -140,6 +140,39 @@ describe("EnqueueForm", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("flags invalid JSON live, before the form is submitted", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+    const payload = screen.getByLabelText("Payload (JSON)");
+
+    fireEvent.change(payload, { target: { value: '{ "a": 1, }' } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/valid JSON/);
+    expect(payload).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("clears the live error once the payload parses again", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+    const payload = screen.getByLabelText("Payload (JSON)");
+
+    fireEvent.change(payload, { target: { value: "{not json" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/valid JSON/);
+
+    fireEvent.change(payload, { target: { value: '{"ok":true}' } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(payload).toHaveAttribute("aria-invalid", "false");
+  });
+
+  it("does not flag an empty payload", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<EnqueueForm onEnqueued={vi.fn()} onError={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Payload (JSON)"), { target: { value: "   " } });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("rejects a priority above the int4 range without calling the API", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

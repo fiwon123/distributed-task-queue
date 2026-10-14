@@ -7,6 +7,20 @@ import type { EnqueueRequest, Job } from "./types";
 // autocomplete hints; the API accepts any type string.
 const SUGGESTED_TYPES = ["echo", "fail", "sleep"];
 
+// payloadIssue returns a message when the payload text is non-empty but cannot
+// be parsed as JSON, and null when it is valid or empty (empty means "omit",
+// which the API stores as {}). It is pure so the live and submit paths share
+// exactly one validation rule.
+function payloadIssue(value: string): string | null {
+  if (value.trim() === "") return null;
+  try {
+    JSON.parse(value);
+    return null;
+  } catch {
+    return "Payload must be valid JSON.";
+  }
+}
+
 // EnqueueForm posts a new job to POST /v1/jobs. On success it resets the
 // payload/schedule fields and reports the created job to its parent; validation
 // and API errors are surfaced inline and via onError respectively.
@@ -27,6 +41,10 @@ export default function EnqueueForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Live payload validity, recomputed on every render (i.e. every keystroke),
+  // so the field can flag a malformed payload before the user submits.
+  const payloadError = payloadIssue(payload);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setValidationError(null);
@@ -37,14 +55,15 @@ export default function EnqueueForm({
       return;
     }
 
+    // The inline message under the field already explains a bad payload, so
+    // stop here rather than stacking a second banner on top of it.
+    if (payloadError !== null) {
+      return;
+    }
+
     let parsedPayload: unknown;
     if (payload.trim() !== "") {
-      try {
-        parsedPayload = JSON.parse(payload);
-      } catch {
-        setValidationError("Payload must be valid JSON.");
-        return;
-      }
+      parsedPayload = JSON.parse(payload);
     }
 
     let attempts: number | undefined;
@@ -167,8 +186,15 @@ export default function EnqueueForm({
           spellCheck={false}
           value={payload}
           onChange={(e) => setPayload(e.target.value)}
+          aria-invalid={payloadError !== null}
+          aria-describedby={payloadError !== null ? "payload-error" : undefined}
         />
       </label>
+      {payloadError !== null && (
+        <p id="payload-error" className="field-error" role="alert">
+          {payloadError}
+        </p>
+      )}
       {validationError && (
         <p className="banner error" role="alert">
           {validationError}
