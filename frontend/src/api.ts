@@ -27,14 +27,26 @@ export function queueStats(queue: string): Promise<Stats> {
 export interface JobQuery {
   queue?: string;
   status?: Status;
+  type?: string;
   limit?: number;
+  before_created_at?: string;
+  before_id?: string;
 }
 
-export function listJobs(params: JobQuery): Promise<{ jobs: Job[]; count: number }> {
+export interface JobsListResponse {
+  jobs: Job[];
+  count: number;
+  next?: { before_created_at: string; before_id: string } | null;
+}
+
+export function listJobs(params: JobQuery): Promise<JobsListResponse> {
   const query = new URLSearchParams();
   if (params.queue) query.set("queue", params.queue);
   if (params.status) query.set("status", params.status);
+  if (params.type) query.set("type", params.type);
   if (params.limit) query.set("limit", String(params.limit));
+  if (params.before_created_at) query.set("before_created_at", params.before_created_at);
+  if (params.before_id) query.set("before_id", params.before_id);
   const qs = query.toString();
   return getJSON(`/v1/jobs${qs ? `?${qs}` : ""}`);
 }
