@@ -768,6 +768,16 @@ th {
   margin-top: 0.75rem;
 }
 
+.field-error {
+  margin: 0.4rem 0 0;
+  color: var(--dead);
+  font-size: 0.75rem;
+}
+
+.payload-field textarea[aria-invalid="true"] {
+  border-color: var(--dead);
+}
+
 /* --- Job detail --------------------------------------------------------- */
 
 .detail {
@@ -820,6 +830,31 @@ pre.payload {
   border-radius: 8px;
   padding: 0.75rem;
   overflow: auto;
+}
+
+.requeue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.curl-snippet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.curl-snippet pre {
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
 }
 
 /* --- Workbench ---------------------------------------------------------- */

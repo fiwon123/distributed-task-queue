@@ -105,4 +105,29 @@ describe("JobDetail", () => {
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/requeue"))).toBe(true),
     );
   });
+
+  it("offers a copyable curl command to requeue a dead job", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(job({ status: "dead", last_error: "kaboom" }))),
+    );
+    render(<JobDetail id={base.id} pollIntervalMs={1000} />);
+
+    const region = await screen.findByRole("region", { name: "job detail" });
+    const command = `curl -X POST ${window.location.origin}/v1/jobs/${base.id}/requeue`;
+    expect(within(region).getByText(command)).toBeInTheDocument();
+    expect(within(region).getByRole("button", { name: "Copy curl" })).toBeInTheDocument();
+  });
+
+  it("omits the requeue command while a job cannot be requeued", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse(job({ status: "running" }))),
+    );
+    render(<JobDetail id={base.id} pollIntervalMs={1000} />);
+
+    const region = await screen.findByRole("region", { name: "job detail" });
+    await within(region).findByText("running");
+    expect(within(region).queryByText(/curl -X POST/)).not.toBeInTheDocument();
+  });
 });

@@ -27,6 +27,13 @@ export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// requeueCurl builds the copy-pasteable command that sends a job back to the
+// queue. It is a pure function of the API origin and the job id so it can be
+// unit-tested without a DOM.
+export function requeueCurl(origin: string, id: string): string {
+  return `curl -X POST ${origin}/v1/jobs/${id}/requeue`;
+}
+
 export function shortID(id: string): string {
   return id.slice(0, 8);
 }
