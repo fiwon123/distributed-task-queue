@@ -100,7 +100,7 @@ export default function JobsView() {
     if (!autoRefresh) return;
     const id = setInterval(loadQueue, 5000);
     return () => clearInterval(id);
-  }, [loadQueue]);
+  }, [autoRefresh, loadQueue]);
 
   const showNotice = useCallback((node: ReactNode) => {
     setNotice((current) => ({ id: (current?.id ?? 0) + 1, node }));
