@@ -272,18 +272,33 @@ and a job that always fails lands in the dead-letter state after `max_attempts`.
 
 ## Development
 
-The docker compose **dev sandbox** gives you the full toolchain (Go, `gh`, `air`
-fast reload) with your host GitHub config mounted read-only and
-`GH_TOKEN`/`GITHUB_TOKEN` forwarded at runtime — never baked into the image. A
-`db` service provides PostgreSQL; the sandbox reaches it at hostname `db`.
+### OS matrix (dev sandbox)
+
+Base compose runs standalone. Host mounts (gh/opencode/gitconfig) merge only
+when a Linux ELF opencode binary exists. Native Windows uses the Python
+launcher.
+
+| Platform | Start | In-container opencode | Notes |
+|---|---|---|---|
+| Linux | `make dev-up` | Yes | Full support |
+| macOS | `make dev-up` | Host only (Mach-O can't run in Linux) | OK |
+| WSL2 | `make dev-up` | Yes (inside distro) | Full support |
+| Windows (native) | `python scripts/dev-up.py dev-up` | Host only | See Troubleshooting; CRLF guarded |
+
+The docker compose **dev sandbox** gives you the full toolchain (Go, `gh`,
+`air` fast reload) with your host GitHub config mounted read-only and
+`GH_TOKEN`/`GITHUB_TOKEN` forwarded at runtime — never baked into the image.
+`dev-up` does not require opencode; only `make opencode` / `make shell`
+require a Linux ELF binary.
 
 ```bash
-make dev-up        # build + start the dev stack (db + sandbox + worker; needs docker on the host)
+make dev-up        # build + start the dev stack (Linux/macOS/WSL2)
+python scripts/dev-up.py dev-up  # native Windows
 make dev-restart   # restart after Dockerfile/deps changes
 make shell         # shell inside the sandbox
-make opencode      # run opencode inside the sandbox
+make opencode      # run opencode inside the sandbox (Linux binary required)
 make dev-log       # follow sandbox + worker logs
-make dev-down      # stop and remove the dev stack (db + sandbox + worker)
+make dev-down      # stop and remove the dev stack
 make reset         # stop both stacks and remove the Postgres volume
 ```
 
