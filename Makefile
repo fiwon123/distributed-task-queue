@@ -11,7 +11,7 @@ NPM ?= npm
 .PHONY: help check fmt vet test build run run-worker openapi-json clean \
         frontend-install frontend-deps frontend-build frontend-test frontend-lint frontend-check \
         frontend-src-guard \
-        preflight dev-up dev-down dev-restart dev-log dev-build reset \
+        preflight require-agent dev-up dev-down dev-restart dev-log dev-build reset \
         shell opencode opencode-auto dev-shell dev-opencode dev-opencode-auto \
         prod-up prod-down prod-logs prod-ps prod-reset demo
 
@@ -131,9 +131,15 @@ POSTGRES_PORT ?= $(call ENV_VAL,POSTGRES_PORT)
 export FRONTEND_PORT HOST_PORT API_PORT POSTGRES_PORT
 
 preflight: ## Check host prerequisites for the dev sandbox
-	@test -x "$(HOME)/.opencode/bin/opencode" || { echo "ERROR: opencode not found at ~/.opencode/bin/opencode" >&2; exit 1; }
 	@mkdir -p "$(HOME)/.config/opencode" "$(HOME)/.config/gh" && touch "$(HOME)/.gitconfig"
 	@scripts/resolve-gh-token.sh --check >/dev/null 2>&1 || true
+
+require-agent:
+	@test "$$(head -c4 "$(HOME)/.opencode/bin/opencode" 2>/dev/null | od -An -tx1 | tr -d ' 
+')" = "7f454c46" || { echo "ERROR: Linux ELF opencode required" >&2; exit 1; }
+
+require-agent:
+	@test "$$(head -c4 "$(HOME)/.opencode/bin/opencode" 2>/dev/null | od -An -tx1 | tr -d ' \n')" = "7f454c46" || { echo "ERROR: Linux ELF opencode required" >&2; exit 1; }
 
 dev-up: preflight ## Build and start the dev stack (db + sandbox + worker + Vite)
 	@HOST_UID=$$(id -u) HOST_GID=$$(id -g) GH_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) GITHUB_TOKEN=$$(scripts/resolve-gh-token.sh 2>/dev/null) docker compose --profile dev up -d --build
